@@ -1,0 +1,236 @@
+# Quantum-Resilient IDS Simulation Framework (Thesis Chapter 4 Implementation)
+# =============================================================================
+# Requirements:
+# pip install numpy pandas matplotlib seaborn torch scikit-learn xgboost
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.metrics import precision_recall_fscore_support, roc_auc_score
+import xgboost as xgb
+from sklearn.model_selection import train_test_split
+import warnings
+warnings.filterwarnings('ignore')
+
+# -----------------------------
+# 1. Synthetic Baseline Traffic Generation
+#     (mimics CIC-IDS2017 / UNSW-NB15 statistical properties)
+# -----------------------------
+def generate_baseline_traffic(n_samples=50000, attack_ratio=0.25):
+    """
+    Generate synthetic flow records similar to CIC-IDS2017 / UNSW-NB15
+    Features inspired by real datasets (packet sizes, durations, flags, etc.)
+    """
+    np.random.seed(42)
+    
+    # Benign traffic (normal)
+    n_benign = int(n_samples * (1 - attack_ratio))
+    benign = pd.DataFrame({
+        'flow_duration': np.random.lognormal(mean=5.0, sigma=1.2, size=n_benign) * 0.001,  # seconds
+        'fwd_packet_count': np.random.negative_binomial(n=10, p=0.6, size=n_benign) + 5,
+        'bwd_packet_count': np.random.negative_binomial(n=8, p=0.65, size=n_benign) + 3,
+        'pkt_size_mean': np.random.normal(620, 140, n_benign),
+        'fwd_init_win_bytes': np.random.normal(64240, 8000, n_benign),
+        'flow_iat_mean': np.random.exponential(scale=0.02, size=n_benign),
+        'label': 0  # 0 = benign
+    })
+    
+    # Attack traffic (simplified - DoS, brute force, scanning, etc.)
+    n_attack = n_samples - n_benign
+    attack = pd.DataFrame({
+        'flow_duration': np.random.lognormal(mean=3.5, sigma=1.5, size=n_attack) * 0.001,
+        'fwd_packet_count': np.random.negative_binomial(n=20, p=0.4, size=n_attack) + 20,
+        'bwd_packet_count': np.random.negative_binomial(n=5, p=0.5, size=n_attack) + 2,
+        'pkt_size_mean': np.random.normal(200, 80, n_attack),
+        'fwd_init_win_bytes': np.random.normal(30000, 15000, n_attack),
+        'flow_iat_mean': np.random.exponential(scale=0.005, size=n_attack),
+        'label': 1  # 1 = attack
+    })
+    
+    df = pd.concat([benign, attack], ignore_index=True)
+    df = df.sample(frac=1, random_state=42).reset_index(drop=True)
+    
+    print(f"Generated {len(df)} synthetic flow records ({attack_ratio*100:.1f}% attack)")
+    return df
+
+# -----------------------------
+# 2. Simulate PQC Traffic Distortion
+# -----------------------------
+def apply_pqc_distortion(df, distortion_factor=(3.0, 6.0), duration_factor=(1.5, 3.2)):
+    """
+    Simulate traffic changes caused by PQC algorithms (larger keys/handshakes)
+    """
+    df_pqc = df.copy()
+    
+    # Increase handshake-related sizes (initial window, mean packet size)
+    size_mult = np.random.uniform(distortion_factor[0], distortion_factor[1], len(df_pqc))
+    df_pqc['pkt_size_mean'] *= size_mult
+    df_pqc['fwd_init_win_bytes'] *= size_mult
+    
+    # Increase flow duration & inter-arrival times (computational overhead)
+    dur_mult = np.random.uniform(duration_factor[0], duration_factor[1], len(df_pqc))
+    df_pqc['flow_duration'] *= dur_mult
+    df_pqc['flow_iat_mean'] *= dur_mult
+    
+    df_pqc['scenario'] = 'pqc'
+    df['scenario'] = 'classical'
+    
+    return pd.concat([df, df_pqc], ignore_index=True)
+
+# -----------------------------
+# 3. Feature Preparation
+# -----------------------------
+def prepare_features(df):
+    features = [
+        'flow_duration', 'fwd_packet_count', 'bwd_packet_count',
+        'pkt_size_mean', 'fwd_init_win_bytes', 'flow_iat_mean'
+    ]
+    
+    X = df[features].copy()
+    y = df['label'].values
+    
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    
+    return X_scaled, y, scaler, features
+
+# -----------------------------
+# 4. Simple Autoencoder (Unsupervised Anomaly Detection)
+# -----------------------------
+class SimpleAutoencoder(nn.Module):
+    def __init__(self, input_dim, encoding_dim=32):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(input_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, encoding_dim),
+            nn.ReLU()
+        )
+        self.decoder = nn.Sequential(
+            nn.Linear(encoding_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, input_dim),
+            nn.Sigmoid()
+        )
+    
+    def forward(self, x):
+        encoded = self.encoder(x)
+        decoded = self.decoder(encoded)
+        return decoded
+
+def train_autoencoder(X_train, epochs=30, batch_size=256, lr=0.001):
+    input_dim = X_train.shape[1]
+    model = SimpleAutoencoder(input_dim)
+    criterion = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    
+    X_tensor = torch.FloatTensor(X_train)
+    dataset = TensorDataset(X_tensor)
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    
+    losses = []
+    for epoch in range(epochs):
+        epoch_loss = 0
+        for batch in loader:
+            data = batch[0]
+            optimizer.zero_grad()
+            output = model(data)
+            loss = criterion(output, data)
+            loss.backward()
+            optimizer.step()
+            epoch_loss += loss.item()
+        avg_loss = epoch_loss / len(loader)
+        losses.append(avg_loss)
+        if (epoch + 1) % 10 == 0:
+            print(f"Epoch {epoch+1}/{epochs}, Loss: {avg_loss:.6f}")
+    
+    return model, losses
+
+def get_reconstruction_error(model, X):
+    model.eval()
+    with torch.no_grad():
+        X_tensor = torch.FloatTensor(X)
+        recon = model(X_tensor)
+        errors = torch.mean((X_tensor - recon) ** 2, dim=1).numpy()
+    return errors
+
+# -----------------------------
+# 5. Ensemble: Autoencoder + XGBoost
+# -----------------------------
+def train_ensemble(X_train, y_train, X_test, y_test):
+    # Autoencoder features (reconstruction error)
+    autoencoder, _ = train_autoencoder(X_train)
+    train_errors = get_reconstruction_error(autoencoder, X_train)
+    test_errors = get_reconstruction_error(autoencoder, X_test)
+    
+    # Combine original features + reconstruction error
+    X_train_meta = np.column_stack([X_train, train_errors])
+    X_test_meta = np.column_stack([X_test, test_errors])
+    
+    # XGBoost classifier
+    clf = xgb.XGBClassifier(
+        n_estimators=150,
+        max_depth=6,
+        learning_rate=0.1,
+        eval_metric='logloss',
+        random_state=42,
+        use_label_encoder=False
+    )
+    
+    clf.fit(X_train_meta, y_train)
+    
+    # Predictions
+    y_pred_proba = clf.predict_proba(X_test_meta)[:, 1]
+    y_pred = (y_pred_proba >= 0.5).astype(int)
+    
+    # Metrics
+    precision, recall, f1, _ = precision_recall_fscore_support(y_test, y_pred, average='binary')
+    auc = roc_auc_score(y_test, y_pred_proba)
+    
+    print(f"\nEnsemble Results:")
+    print(f"Precision: {precision:.4f}")
+    print(f"Recall:    {recall:.4f}")
+    print(f"F1-Score:  {f1:.4f}")
+    print(f"AUC-ROC:   {auc:.4f}")
+    
+    return clf, autoencoder, y_pred_proba
+
+# -----------------------------
+# 6. Main Execution
+# -----------------------------
+if __name__ == "__main__":
+    print("=== Quantum-Resilient IDS Simulation (PQC Transformation) ===\n")
+    
+    # 1. Generate baseline (classical) traffic
+    df_classical = generate_baseline_traffic(n_samples=80000, attack_ratio=0.28)
+    
+    # 2. Simulate PQC distorted traffic
+    df_all = apply_pqc_distortion(df_classical)
+    
+    # 3. Prepare features
+    X, y, scaler, feature_names = prepare_features(df_all)
+    
+    # 4. Train / test split
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.3, random_state=42, stratify=y
+    )
+    
+    # 5. Train & evaluate ensemble
+    model, autoencoder, scores = train_ensemble(X_train, y_train, X_test, y_test)
+    
+    # 6. Optional: Visualisation example
+    plt.figure(figsize=(10, 5))
+    plt.hist(get_reconstruction_error(autoencoder, X_test[y_test==0]), bins=80, alpha=0.6, label='Benign', color='green')
+    plt.hist(get_reconstruction_error(autoencoder, X_test[y_test==1]), bins=80, alpha=0.6, label='Attack', color='red')
+    plt.title("Reconstruction Error Distribution (Autoencoder)")
+    plt.xlabel("MSE Reconstruction Error")
+    plt.ylabel("Frequency")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
