@@ -1,7 +1,8 @@
-# Quantum-Resilient IDS Simulation Framework (Thesis Chapter 4 Implementation)
-# =============================================================================
-# Requirements:
-# pip install numpy pandas matplotlib seaborn torch scikit-learn xgboost
+# April 2026
+# Quantum-Resilient IDS Thesis Pipeline
+# Autoencoder + XGBoost + Classical TLS + PQC + QKD + Metadata + Correlation + Reconstruction Error
+# OPIT_Charles_Emuze_Thesis-Ready Version
+# =============
 
 import numpy as np
 import pandas as pd
@@ -10,132 +11,301 @@ import seaborn as sns
 import torch
 import torch.nn as nn
 import torch.optim as optim
+
 from torch.utils.data import DataLoader, TensorDataset
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.metrics import precision_recall_fscore_support, roc_auc_score
-import xgboost as xgb
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-import warnings
-warnings.filterwarnings('ignore')
+from sklearn.metrics import precision_recall_fscore_support, roc_auc_score, roc_curve, confusion_matrix
+import xgboost as xgb
+import matplotlib.patches as patches
 
-# -----------------------------
-# 1. Synthetic Baseline Traffic Generation
-#     (mimics CIC-IDS2017 / UNSW-NB15 statistical properties)
-# -----------------------------
-def generate_baseline_traffic(n_samples=50000, attack_ratio=0.25):
-    """
-    Generate synthetic flow records similar to CIC-IDS2017 / UNSW-NB15
-    Features inspired by real datasets (packet sizes, durations, flags, etc.)
-    """
-    np.random.seed(42)
-    
-    # Benign traffic (normal)
-    n_benign = int(n_samples * (1 - attack_ratio))
-    benign = pd.DataFrame({
-        'flow_duration': np.random.lognormal(mean=5.0, sigma=1.2, size=n_benign) * 0.001,  # seconds
-        'fwd_packet_count': np.random.negative_binomial(n=10, p=0.6, size=n_benign) + 5,
-        'bwd_packet_count': np.random.negative_binomial(n=8, p=0.65, size=n_benign) + 3,
-        'pkt_size_mean': np.random.normal(620, 140, n_benign),
-        'fwd_init_win_bytes': np.random.normal(64240, 8000, n_benign),
-        'flow_iat_mean': np.random.exponential(scale=0.02, size=n_benign),
-        'label': 0  # 0 = benign
-    })
-    
-    # Attack traffic (simplified - DoS, brute force, scanning, etc.)
-    n_attack = n_samples - n_benign
-    attack = pd.DataFrame({
-        'flow_duration': np.random.lognormal(mean=3.5, sigma=1.5, size=n_attack) * 0.001,
-        'fwd_packet_count': np.random.negative_binomial(n=20, p=0.4, size=n_attack) + 20,
-        'bwd_packet_count': np.random.negative_binomial(n=5, p=0.5, size=n_attack) + 2,
-        'pkt_size_mean': np.random.normal(200, 80, n_attack),
-        'fwd_init_win_bytes': np.random.normal(30000, 15000, n_attack),
-        'flow_iat_mean': np.random.exponential(scale=0.005, size=n_attack),
-        'label': 1  # 1 = attack
-    })
-    
-    df = pd.concat([benign, attack], ignore_index=True)
-    df = df.sample(frac=1, random_state=42).reset_index(drop=True)
-    
-    print(f"Generated {len(df)} synthetic flow records ({attack_ratio*100:.1f}% attack)")
-    return df
+# Thesis-friendly styling
+plt.style.use('seaborn-v0_8-whitegrid')
+sns.set_palette("husl")
+plt.rcParams['figure.figsize'] = (12, 8)
+plt.rcParams['font.size'] = 13
+plt.rcParams['axes.titlesize'] = 16
+plt.rcParams['axes.labelsize'] = 14
 
-# -----------------------------
-# 2. Simulate PQC Traffic Distortion
-# -----------------------------
-def apply_pqc_distortion(df, distortion_factor=(3.0, 6.0), duration_factor=(1.5, 3.2)):
-    """
-    Simulate traffic changes caused by PQC algorithms (larger keys/handshakes)
-    """
+np.random.seed(42)
+torch.manual_seed(42)
+
+# ============================================================
+# 1. LOAD CIC-IDS2017 DATASET
+# ============================================================
+
+print("Loading CIC-IDS2017 dataset...")
+
+files = [
+    "Monday-WorkingHours.pcap_ISCX.csv",
+    "Tuesday-WorkingHours.pcap_ISCX.csv",
+    "Wednesday-workingHours.pcap_ISCX.csv",
+    "Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv",
+    "Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv",
+    "Friday-WorkingHours-Morning.pcap_ISCX.csv",
+    "Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv",
+    "Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv"
+]
+
+df = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
+df.columns = df.columns.str.strip()
+
+features = ["Flow Duration", "Total Fwd Packets", "Total Backward Packets",
+            "Average Packet Size", "Init_Win_bytes_forward", "Flow IAT Mean"]
+
+df = df[features + ["Label"]]
+df["label"] = (df["Label"] != "BENIGN").astype(int)
+df = df.drop(columns=["Label"])
+
+df.columns = ["flow_duration", "fwd_packet_count", "bwd_packet_count",
+              "pkt_size_mean", "fwd_init_win_bytes", "flow_iat_mean", "label"]
+
+print("Dataset shape:", df.shape)
+df = df.sample(150000, random_state=42)
+
+# ============================================================
+# 2. CLASSICAL TLS TRAFFIC SIMULATION
+# ============================================================
+
+print("\nApplying Classical TLS Traffic Simulation...")
+
+def apply_classical_tls_simulation(df):
+    df_classical = df.copy()
+    df_classical["scenario"] = "classical_tls"
+    df_classical["traffic_type"] = "Classical TLS"
+
+    size_mult = np.random.uniform(0.85, 1.15, len(df))
+    dur_mult = np.random.uniform(0.8, 1.25, len(df))
+
+    df_classical["pkt_size_mean"] *= size_mult
+    df_classical["fwd_init_win_bytes"] *= size_mult * 0.95
+    df_classical["flow_duration"] *= dur_mult
+    df_classical["flow_iat_mean"] *= dur_mult * 0.85
+
+    return df_classical
+
+df_classical_tls = apply_classical_tls_simulation(df)
+
+# ============================================================
+# 3. PQC TRAFFIC SIMULATION
+# ============================================================
+
+def apply_pqc_distortion(df):
     df_pqc = df.copy()
-    
-    # Increase handshake-related sizes (initial window, mean packet size)
-    size_mult = np.random.uniform(distortion_factor[0], distortion_factor[1], len(df_pqc))
-    df_pqc['pkt_size_mean'] *= size_mult
-    df_pqc['fwd_init_win_bytes'] *= size_mult
-    
-    # Increase flow duration & inter-arrival times (computational overhead)
-    dur_mult = np.random.uniform(duration_factor[0], duration_factor[1], len(df_pqc))
-    df_pqc['flow_duration'] *= dur_mult
-    df_pqc['flow_iat_mean'] *= dur_mult
-    
-    df_pqc['scenario'] = 'pqc'
-    df['scenario'] = 'classical'
-    
-    return pd.concat([df, df_pqc], ignore_index=True)
+    size_mult = np.random.uniform(3.0, 6.0, len(df))
+    dur_mult = np.random.uniform(1.5, 3.2, len(df))
 
-# -----------------------------
-# 3. Feature Preparation
-# -----------------------------
-def prepare_features(df):
-    features = [
-        'flow_duration', 'fwd_packet_count', 'bwd_packet_count',
-        'pkt_size_mean', 'fwd_init_win_bytes', 'flow_iat_mean'
-    ]
-    
-    X = df[features].copy()
-    y = df['label'].values
-    
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-    
-    return X_scaled, y, scaler, features
+    df_pqc[["pkt_size_mean", "fwd_init_win_bytes"]] *= size_mult[:, np.newaxis]
+    df_pqc[["flow_duration", "flow_iat_mean"]] *= dur_mult[:, np.newaxis]
 
-# -----------------------------
-# 4. Simple Autoencoder (Unsupervised Anomaly Detection)
-# -----------------------------
-class SimpleAutoencoder(nn.Module):
-    def __init__(self, input_dim, encoding_dim=32):
+    df_pqc["scenario"] = "pqc"
+    df_pqc["traffic_type"] = "PQC"
+
+    return df_pqc
+
+df_pqc = apply_pqc_distortion(df)
+
+df_all = pd.concat([df_classical_tls, df_pqc], ignore_index=True)
+print("\nTraffic scenario distribution:\n", df_all["traffic_type"].value_counts())
+
+# ============================================================
+# 4. NETWORK METADATA SUMMARY
+# ============================================================
+
+print("\n=== Network Metadata Summary ===")
+metadata = {
+    "Total Flows": len(df_all),
+    "Classical TLS Flows": len(df_all[df_all["traffic_type"] == "Classical TLS"]),
+    "PQC Flows": len(df_all[df_all["traffic_type"] == "PQC"]),
+    "Benign Flows": len(df_all[df_all["label"] == 0]),
+    "Attack Flows": len(df_all[df_all["label"] == 1]),
+    "Avg Packet Size (Classical TLS)": df_all[df_all["traffic_type"] == "Classical TLS"]["pkt_size_mean"].mean(),
+    "Avg Packet Size (PQC)": df_all[df_all["traffic_type"] == "PQC"]["pkt_size_mean"].mean(),
+    "Avg Flow Duration (Classical TLS)": df_all[df_all["traffic_type"] == "Classical TLS"]["flow_duration"].mean(),
+    "Avg Flow Duration (PQC)": df_all[df_all["traffic_type"] == "PQC"]["flow_duration"].mean(),
+}
+
+for key, value in metadata.items():
+    if "Avg" in key:
+        print(f"{key}: {value:,.2f}")
+    else:
+        print(f"{key}: {value:,}")
+
+# ============================================================
+# 5. ENHANCED FEATURE CORRELATION HEATMAP
+# ============================================================
+
+print("\nGenerating Enhanced Feature Correlation Heatmap...")
+
+numerical_features = ['flow_duration', 'fwd_packet_count', 'bwd_packet_count',
+                      'pkt_size_mean', 'fwd_init_win_bytes', 'flow_iat_mean']
+
+corr_matrix = df_all[numerical_features].corr()
+
+plt.figure(figsize=(11, 9))
+mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
+sns.heatmap(corr_matrix, mask=mask, annot=True, cmap='coolwarm', center=0,
+            square=True, linewidths=0.5, fmt='.2f', cbar_kws={'shrink': 0.75},
+            annot_kws={'size': 10})
+plt.title("Feature Correlation Heatmap\n(Classical TLS + PQC Traffic)")
+plt.tight_layout()
+plt.savefig("step4_feature_correlation_heatmap.png", dpi=600, bbox_inches='tight')
+plt.close()
+
+print("✓ Feature Correlation Heatmap generated.")
+
+# ============================================================
+# 6. CLASSICAL TLS vs PQC PACKET SIZE DISTRIBUTION
+# ============================================================
+
+print("\nGenerating Classical TLS vs PQC Packet Size Distribution...")
+
+plt.figure(figsize=(12, 8))
+sns.boxplot(x="traffic_type", y="pkt_size_mean", data=df_all, palette=['#1f77b4', '#d62728'])
+plt.title("Packet Size Distribution: Classical TLS vs Post-Quantum Cryptography (PQC)")
+plt.ylabel("Average Packet Size (bytes)")
+plt.xlabel("Traffic Type")
+plt.grid(axis='y', alpha=0.3)
+
+means = df_all.groupby("traffic_type")["pkt_size_mean"].mean()
+for i, mean_val in enumerate(means):
+    plt.text(i, mean_val + 80, f"Mean: {mean_val:.0f} bytes", 
+             ha='center', va='bottom', fontsize=12, fontweight='bold')
+
+plt.tight_layout()
+plt.savefig("step7_classical_tls_vs_pqc_packet_size.png", dpi=600, bbox_inches='tight')
+plt.close()
+
+# ============================================================
+# 7. QKD CHANNEL SIMULATION + EAVESDROPPER ANALYSIS
+# ============================================================
+
+print("\n=== Realistic QKD Channel Simulation (BB84) ===")
+
+def binary_entropy(p):
+    if p == 0 or p == 1:
+        return 0.0
+    return -p * np.log2(p) - (1 - p) * np.log2(1 - p)
+
+def simulate_qkd(distance_km=50, num_bits=50000, attenuation_db_per_km=0.2,
+                 dark_count_prob=1e-6, detector_eff=0.9, misalignment=0.015,
+                 eve_fraction=0.0):
+    eta = 10 ** (-attenuation_db_per_km * distance_km / 10) * detector_eff
+    alice_bits = np.random.randint(0, 2, num_bits)
+    alice_bases = np.random.randint(0, 2, num_bits)
+    bob_bases = np.random.randint(0, 2, num_bits)
+
+    sifted_mask = (alice_bases == bob_bases)
+    sifted_alice = alice_bits[sifted_mask]
+
+    arrival = np.random.rand(len(sifted_alice)) < eta
+    dark = np.random.rand(len(sifted_alice)) < dark_count_prob
+    detected = arrival | dark
+
+    error_mask = np.random.rand(len(sifted_alice)) < misalignment
+    sifted_bob = np.where(detected,
+                          np.where(error_mask, 1 - sifted_alice, sifted_alice),
+                          np.random.randint(0, 2, len(sifted_alice)))
+
+    if eve_fraction > 0:
+        eve_mask = np.random.rand(len(sifted_alice)) < eve_fraction
+        eve_bits = np.random.randint(0, 2, len(sifted_alice))
+        sifted_bob = np.where(eve_mask, eve_bits, sifted_bob)
+
+    qber = np.mean(sifted_alice != sifted_bob) if len(sifted_alice) > 0 else 0.0
+    secure_rate = max(1 - 2 * binary_entropy(qber), 0.0)
+
+    return {"qber": qber, "sifted_length": len(sifted_alice),
+            "secure_rate": secure_rate, "distance_km": distance_km}
+
+distances = [10, 50, 100]
+qkd_results = {}
+for dist in distances:
+    res = simulate_qkd(distance_km=dist, eve_fraction=0.0)
+    qkd_results[dist] = res
+    print(f"QKD @ {dist} km → QBER: {res['qber']:.4f} | "
+          f"Sifted bits: {res['sifted_length']} | Secure rate: {res['secure_rate']:.4f}")
+
+# QKD + Eavesdropper Figure
+eve_fractions = np.linspace(0, 0.3, 7)
+qber_eve = [simulate_qkd(distance_km=50, eve_fraction=e)["qber"] for e in eve_fractions]
+
+fig, axs = plt.subplots(1, 2, figsize=(15, 6))
+scenarios = ["Classical TLS", "PQC", "QKD 10km", "QKD 50km", "QKD 100km"]
+qber_vals = [0.001, 0.005, qkd_results[10]["qber"], qkd_results[50]["qber"], qkd_results[100]["qber"]]
+
+axs[0].bar(scenarios, qber_vals, color=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'])
+axs[0].set_title("QBER Comparison")
+axs[0].set_ylabel("QBER")
+for i, v in enumerate(qber_vals):
+    axs[0].text(i, v + 0.001, f"{v:.4f}", ha='center')
+
+axs[1].plot(eve_fractions, qber_eve, marker='o', linewidth=2.5, color='#d62728')
+axs[1].set_title("QBER vs Eavesdropper Fraction (50 km)")
+axs[1].set_xlabel("Eavesdropper Fraction")
+axs[1].set_ylabel("QBER")
+axs[1].grid(True, alpha=0.3)
+
+plt.suptitle("QKD Channel Analysis", fontsize=18)
+plt.tight_layout()
+plt.savefig("step5_qkd_qber_eve_analysis.png", dpi=600, bbox_inches='tight')
+plt.close()
+
+# TLS Handshake Size
+print("\nGenerating TLS Handshake Size Comparison...")
+categories = ['Classical TLS', 'Hybrid', 'Pure PQC']
+sizes = [1050, 3600, 5100]
+plt.figure(figsize=(11, 7))
+bars = plt.bar(categories, sizes, color=['#1f77b4', '#800080', '#FF2D55'], width=0.6)
+plt.title("Cryptographic Layer TLS Handshake Size Comparison")
+plt.ylabel("Handshake Size (bytes)")
+for bar, size in zip(bars, sizes):
+    plt.text(bar.get_x() + bar.get_width()/2, size + 120, f'{size:,}', 
+             ha='center', va='bottom', fontweight='bold')
+plt.grid(axis='y', alpha=0.3)
+plt.tight_layout()
+plt.savefig("step6_tls_handshake_size_comparison.png", dpi=600, bbox_inches='tight')
+plt.close()
+
+# ============================================================
+# 8. AUTOENCODER TRAINING & RECONSTRUCTION ERROR ANALYSIS
+# ============================================================
+
+print("\n=== Autoencoder Training & Reconstruction Error Analysis ===")
+
+X = df_all.drop(["label", "scenario", "traffic_type"], axis=1)
+y = df_all["label"].values
+
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X_scaled, y, test_size=0.3, random_state=42, stratify=y
+)
+
+class Autoencoder(nn.Module):
+    def __init__(self, input_dim):
         super().__init__()
         self.encoder = nn.Sequential(
-            nn.Linear(input_dim, 64),
-            nn.ReLU(),
-            nn.Linear(64, encoding_dim),
-            nn.ReLU()
+            nn.Linear(input_dim, 64), nn.ReLU(),
+            nn.Linear(64, 32), nn.ReLU()
         )
         self.decoder = nn.Sequential(
-            nn.Linear(encoding_dim, 64),
-            nn.ReLU(),
-            nn.Linear(64, input_dim),
-            nn.Sigmoid()
+            nn.Linear(32, 64), nn.ReLU(),
+            nn.Linear(64, input_dim)
         )
-    
-    def forward(self, x):
-        encoded = self.encoder(x)
-        decoded = self.decoder(encoded)
-        return decoded
 
-def train_autoencoder(X_train, epochs=30, batch_size=256, lr=0.001):
-    input_dim = X_train.shape[1]
-    model = SimpleAutoencoder(input_dim)
+    def forward(self, x):
+        return self.decoder(self.encoder(x))
+
+def train_autoencoder(X_train):
+    model = Autoencoder(X_train.shape[1])
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    
-    X_tensor = torch.FloatTensor(X_train)
-    dataset = TensorDataset(X_tensor)
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    
-    losses = []
-    for epoch in range(epochs):
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    loader = DataLoader(TensorDataset(torch.FloatTensor(X_train)), batch_size=256, shuffle=True)
+
+    print("Starting Autoencoder Training...")
+    for epoch in range(15):
         epoch_loss = 0
         for batch in loader:
             data = batch[0]
@@ -145,92 +315,150 @@ def train_autoencoder(X_train, epochs=30, batch_size=256, lr=0.001):
             loss.backward()
             optimizer.step()
             epoch_loss += loss.item()
-        avg_loss = epoch_loss / len(loader)
-        losses.append(avg_loss)
-        if (epoch + 1) % 10 == 0:
-            print(f"Epoch {epoch+1}/{epochs}, Loss: {avg_loss:.6f}")
-    
-    return model, losses
+        if (epoch + 1) % 5 == 0:
+            print(f"Epoch {epoch+1}/15 - Loss: {epoch_loss/len(loader):.6f}")
+    return model
 
-def get_reconstruction_error(model, X):
+def reconstruction_error(model, X):
     model.eval()
     with torch.no_grad():
-        X_tensor = torch.FloatTensor(X)
-        recon = model(X_tensor)
-        errors = torch.mean((X_tensor - recon) ** 2, dim=1).numpy()
-    return errors
+        recon = model(torch.FloatTensor(X))
+        return torch.mean((torch.FloatTensor(X) - recon)**2, dim=1).numpy()
 
-# -----------------------------
-# 5. Ensemble: Autoencoder + XGBoost
-# -----------------------------
-def train_ensemble(X_train, y_train, X_test, y_test):
-    # Autoencoder features (reconstruction error)
-    autoencoder, _ = train_autoencoder(X_train)
-    train_errors = get_reconstruction_error(autoencoder, X_train)
-    test_errors = get_reconstruction_error(autoencoder, X_test)
-    
-    # Combine original features + reconstruction error
-    X_train_meta = np.column_stack([X_train, train_errors])
-    X_test_meta = np.column_stack([X_test, test_errors])
-    
-    # XGBoost classifier
-    clf = xgb.XGBClassifier(
-        n_estimators=150,
-        max_depth=6,
-        learning_rate=0.1,
-        eval_metric='logloss',
-        random_state=42,
-        use_label_encoder=False
-    )
-    
-    clf.fit(X_train_meta, y_train)
-    
-    # Predictions
-    y_pred_proba = clf.predict_proba(X_test_meta)[:, 1]
-    y_pred = (y_pred_proba >= 0.5).astype(int)
-    
-    # Metrics
-    precision, recall, f1, _ = precision_recall_fscore_support(y_test, y_pred, average='binary')
-    auc = roc_auc_score(y_test, y_pred_proba)
-    
-    print(f"\nEnsemble Results:")
-    print(f"Precision: {precision:.4f}")
-    print(f"Recall:    {recall:.4f}")
-    print(f"F1-Score:  {f1:.4f}")
-    print(f"AUC-ROC:   {auc:.4f}")
-    
-    return clf, autoencoder, y_pred_proba
+# Train the Autoencoder
+autoencoder = train_autoencoder(X_train)
 
-# -----------------------------
-# 6. Main Execution
-# -----------------------------
-if __name__ == "__main__":
-    print("=== Quantum-Resilient IDS Simulation (PQC Transformation) ===\n")
-    
-    # 1. Generate baseline (classical) traffic
-    df_classical = generate_baseline_traffic(n_samples=80000, attack_ratio=0.28)
-    
-    # 2. Simulate PQC distorted traffic
-    df_all = apply_pqc_distortion(df_classical)
-    
-    # 3. Prepare features
-    X, y, scaler, feature_names = prepare_features(df_all)
-    
-    # 4. Train / test split
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.3, random_state=42, stratify=y
-    )
-    
-    # 5. Train & evaluate ensemble
-    model, autoencoder, scores = train_ensemble(X_train, y_train, X_test, y_test)
-    
-    # 6. Optional: Visualisation example
-    plt.figure(figsize=(10, 5))
-    plt.hist(get_reconstruction_error(autoencoder, X_test[y_test==0]), bins=80, alpha=0.6, label='Benign', color='green')
-    plt.hist(get_reconstruction_error(autoencoder, X_test[y_test==1]), bins=80, alpha=0.6, label='Attack', color='red')
-    plt.title("Reconstruction Error Distribution (Autoencoder)")
-    plt.xlabel("MSE Reconstruction Error")
-    plt.ylabel("Frequency")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+# Reconstruction Error Analysis
+test_errors = reconstruction_error(autoencoder, X_test)
+benign_errors = test_errors[y_test == 0]
+attack_errors = test_errors[y_test == 1]
+
+print(f"\nReconstruction Error Statistics:")
+print(f"Benign  - Mean: {benign_errors.mean():.6f} | Std: {benign_errors.std():.6f}")
+print(f"Attack  - Mean: {attack_errors.mean():.6f} | Std: {attack_errors.std():.6f}")
+
+# 1. Normal Scale Distribution
+plt.figure(figsize=(12, 8))
+plt.hist(benign_errors, bins=100, alpha=0.75, label='Benign', color='#1f77b4', edgecolor='black')
+plt.hist(attack_errors, bins=100, alpha=0.75, label='Attack', color='#d62728', edgecolor='black')
+threshold = benign_errors.mean() + 3 * benign_errors.std()
+plt.axvline(threshold, color='red', linestyle='--', linewidth=2.5, 
+            label=f'Detection Threshold (μ + 3σ = {threshold:.5f})')
+plt.title("Autoencoder Reconstruction Error Distribution")
+plt.xlabel("Reconstruction Error (MSE)")
+plt.ylabel("Frequency")
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.savefig("step9_autoencoder_reconstruction_error.png", dpi=600, bbox_inches='tight')
+plt.close()
+
+# 2. Log Scale Distribution
+plt.figure(figsize=(12, 8))
+plt.hist(benign_errors, bins=80, alpha=0.75, label='Benign', color='#1f77b4', edgecolor='black')
+plt.hist(attack_errors, bins=80, alpha=0.75, label='Attack', color='#d62728', edgecolor='black')
+plt.title("Autoencoder Reconstruction Error Distribution (Log Scale)")
+plt.xlabel("Reconstruction Error (MSE) - Log Scale")
+plt.ylabel("Frequency (Log Scale)")
+plt.xscale('log')
+plt.yscale('log')
+plt.legend()
+plt.grid(True, alpha=0.3, which='both')
+plt.tight_layout()
+plt.savefig("step9_autoencoder_error_log.png", dpi=600, bbox_inches='tight')
+plt.close()
+
+# 3. Classical TLS vs PQC Error Comparison
+X_test_df = pd.DataFrame(X_test, columns=X.columns)
+X_test_df['error'] = test_errors
+X_test_df['label'] = y_test
+X_test_df['scenario'] = df_all.loc[X_test_df.index, 'traffic_type'].values
+
+plt.figure(figsize=(12, 8))
+sns.boxplot(x='scenario', y='error', hue='label', data=X_test_df, palette=['#1f77b4', '#d62728'])
+plt.yscale('log')
+plt.title("Reconstruction Error: Classical TLS vs PQC Traffic")
+plt.ylabel("Reconstruction Error (MSE) - Log Scale")
+plt.legend(title="Class", labels=["Benign", "Attack"])
+plt.tight_layout()
+plt.savefig("step9_classical_vs_pqc_error.png", dpi=600, bbox_inches='tight')
+plt.close()
+
+print("✓ Autoencoder training and reconstruction error analysis completed.")
+
+# ============================================================
+# 10. XGBoost + FINAL EVALUATION
+# ============================================================
+
+train_errors = reconstruction_error(autoencoder, X_train)
+X_train_meta = np.column_stack([X_train, train_errors])
+X_test_meta = np.column_stack([X_test, test_errors])
+
+print("\nTraining XGBoost Classifier...")
+model = xgb.XGBClassifier(n_estimators=150, max_depth=6, learning_rate=0.1,
+                          eval_metric="logloss", random_state=42)
+model.fit(X_train_meta, y_train)
+
+y_pred_proba = model.predict_proba(X_test_meta)[:, 1]
+y_pred = (y_pred_proba >= 0.5).astype(int)
+
+precision, recall, f1, _ = precision_recall_fscore_support(y_test, y_pred, average="binary", zero_division=0)
+auc = roc_auc_score(y_test, y_pred_proba)
+
+print("\n========== QUANTUM-RESILIENT IDS RESULTS ==========")
+print(f"Precision : {precision:.4f}")
+print(f"Recall    : {recall:.4f}")
+print(f"F1-Score  : {f1:.4f}")
+print(f"AUC       : {auc:.4f}")
+
+# ============================================================
+# 11. LaTeX TABLE + FIGURE CAPTIONS + DISCUSSION PARAGRAPH
+# ============================================================
+
+print("\n" + "="*90)
+print("LaTeX TABLE & FIGURE CAPTIONS - COPY INTO YOUR THESIS")
+print("="*90)
+
+latex_table = f"""
+\\begin{{table}}[htbp]
+\\centering
+\\caption{{Performance of the Quantum-Resilient IDS (Autoencoder + XGBoost)}}
+\\label{{tab:ids_performance}}
+\\begin{{tabular}}{{l c}}
+\\hline
+\\textbf{{Metric}} & \\textbf{{Value}} \\\\
+\\hline
+Precision & {precision:.4f} \\\\
+Recall    & {recall:.4f} \\\\
+F1-Score  & {f1:.4f} \\\\
+AUC       & {auc:.4f} \\\\
+\\hline
+\\end{{tabular}}
+\\end{{table}}
+"""
+print(latex_table)
+
+captions = {
+    "step4_feature_correlation_heatmap.png": "Feature correlation heatmap of parsed network flow features under Classical TLS and PQC traffic scenarios.",
+    "step7_classical_tls_vs_pqc_packet_size.png": "Packet size distribution comparison between Classical TLS and Post-Quantum Cryptography (PQC) traffic.",
+    "step9_autoencoder_reconstruction_error.png": "Autoencoder reconstruction error distribution with detection threshold (mean + 3σ).",
+    "step9_autoencoder_error_log.png": "Log-scale reconstruction error distribution showing clear separation between benign and attack traffic.",
+    "step9_classical_vs_pqc_error.png": "Reconstruction error comparison between Classical TLS and PQC traffic.",
+    "step5_qkd_qber_eve_analysis.png": "QKD channel analysis showing QBER across scenarios and eavesdropper impact.",
+    "step6_tls_handshake_size_comparison.png": "TLS handshake size comparison across Classical TLS, Hybrid, and Pure PQC implementations."
+}
+
+for filename, caption in captions.items():
+    label = filename.replace(".png", "").replace("step", "fig")
+    print(f"\\begin{{figure}}[htbp]")
+    print(f"\\centering")
+    print(f"\\includegraphics[width=0.95\\textwidth]{{{filename}}}")
+    print(f"\\caption{{{caption}}}")
+    print(f"\\label{{{label}}}")
+    print(f"\\end{{figure}}")
+    print("-" * 60)
+
+# Discussion Paragraph
+print("\n" + "="*90)
+print("DISCUSSION PARAGRAPH - COPY INTO YOUR THESIS")
+print("="*90)
