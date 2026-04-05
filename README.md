@@ -20,7 +20,7 @@ Contents
 
 Usage
 
-\- Clone the repository: git clone https://github.com/yourusername/quantum-resilient-ids.git
+\- Clone the repository: git clone https://github.com/quantumnkryption/quantum-resilient-ids.git
 
 \- Install dependencies: pip install -r requirements.txt
 
