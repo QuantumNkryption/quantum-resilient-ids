@@ -457,8 +457,3 @@ for filename, caption in captions.items():
     print(f"\\label{{{label}}}")
     print(f"\\end{{figure}}")
     print("-" * 60)
-
-# Discussion Paragraph
-print("\n" + "="*90)
-print("DISCUSSION PARAGRAPH - COPY INTO YOUR THESIS")
-print("="*90)
