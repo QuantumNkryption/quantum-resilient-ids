@@ -10,9 +10,10 @@ This repository extends the MSc research project **AI-Powered Intrusion Detectio
 |---|---|---:|---|
 | Phase 0 | Research design freeze: workloads, attack taxonomy, feature schema, evaluation metrics, grouped splits, provenance rules | Complete | `docs/phase-0-research-design.md` |
 | Phase 1A | Reproducible OQS/OpenSSL qualification environment | Complete | `docs/phase-1a-oqs-qualification.md` |
-| Phase 1B | TLS handshake, PCAP and reproducibility validation | In progress | ML-DSA-65 certificate generation verified; full handshake/PCAP/rebuild acceptance evidence still pending |
+| Phase 1B | PQC/hybrid TLS generation, packet capture and clean rebuild reproducibility | Complete | `docs/phase-1b-tls-validation.md`; `artifacts/sanitized/phase1b_tls_reproducibility_summary.md` |
+| Phase 1C | Controlled classical vs hybrid vs PQC TLS validation matrix | Planned / pending | `docs/phase-1c-cross-regime-validation.md` |
 
-The repository deliberately distinguishes **verified evidence** from planned or thesis-era claims. Results are never promoted from “planned” or “partial” to “verified” without preserved artifacts and reproducible commands.
+The repository deliberately distinguishes **verified evidence** from planned or thesis-era claims. Results are never promoted from `pending` to `verified` without preserved evidence and documented provenance.
 
 ## Current qualified cryptographic stack
 
@@ -25,14 +26,16 @@ Phase 1A qualified a containerized stack comprising:
 - OQS provider active and separated from the host OpenSSL installation
 - ML-KEM, hybrid `X25519MLKEM768`, and ML-DSA exposed through the provider
 
-The next acceptance gate is Phase 1B: prove classical/hybrid/PQC TLS negotiation, capture and independently inspect the handshake, then destroy/rebuild/reproduce the environment.
+Phase 1B then verified that this environment can reproducibly generate and capture the target TLS 1.3 handshake using `X25519MLKEM768` and ML-DSA-65 authentication. Two accepted runs were completed, with the second following a clean destroy/rebuild of the qualified environment.
+
+The next experimental gate is **Phase 1C**, which will place classical, hybrid and PQC-oriented TLS under one standardized comparison protocol before later IDS and machine-learning experiments begin.
 
 ## Scientific framing
 
 The platform tests the hypothesis that changing the cryptographic regime can alter observable metadata even when application behavior is held constant. The key experimental regimes are:
 
 1. **Classical TLS** — classical key establishment and authentication.
-2. **Hybrid TLS** — classical + ML-KEM key establishment, with PQC-capable authentication where supported.
+2. **Hybrid TLS** — classical + ML-KEM key establishment, including the qualified `X25519MLKEM768` path.
 3. **PQC-oriented TLS** — ML-KEM / ML-DSA configurations where the qualified stack permits them.
 
 The controlled workload set includes HTTPS GETs, repeated requests, API-style traffic, small and large downloads, and concurrent sessions. Initial attack-behavior classes are reconnaissance, brute-force behavior, and request flooding. These are laboratory-only workloads and are not instructions for attacking external systems.
@@ -61,13 +64,15 @@ Phase 0 also freezes provenance requirements so that each later result can be tr
 │   ├── reproducibility.md
 │   ├── phase-0-research-design.md
 │   ├── phase-1a-oqs-qualification.md
-│   └── phase-1b-tls-validation.md
+│   ├── phase-1b-tls-validation.md
+│   └── phase-1c-cross-regime-validation.md
 ├── environment/
 │   └── stack.md
 ├── artifacts/
 │   └── sanitized/
 │       ├── README.md
-│       └── phase1b_mldsa65_certificate_summary.txt
+│       ├── phase1b_mldsa65_certificate_summary.txt
+│       └── phase1b_tls_reproducibility_summary.md
 ├── results/
 │   └── results.csv
 └── Quantum-Resilient IDS Simulation.txt   # legacy MSc thesis-era implementation
@@ -77,11 +82,11 @@ The legacy thesis script is retained for provenance. It should not be interprete
 
 ## Reproducing the current state
 
-See [`docs/reproducibility.md`](docs/reproducibility.md). At this stage, reproduction means rebuilding the Phase 1A cryptographic environment and repeating the Phase 1B acceptance tests. No later ML result is considered validated by this repository yet.
+See [`docs/reproducibility.md`](docs/reproducibility.md). The current verified reproducibility boundary includes Phase 1A environment qualification and the completed Phase 1B hybrid/PQC-capable TLS acceptance result. Phase 1C remains pending and must be executed under its common cross-regime protocol before comparative TLS claims are made.
 
 ## Results
 
-The canonical machine-readable results table is [`results/results.csv`](results/results.csv). It intentionally records incomplete work explicitly rather than filling missing values with thesis-era or simulated numbers.
+The canonical machine-readable results table is [`results/results.csv`](results/results.csv). Phase 1B acceptance rows are recorded as `verified`; Phase 1C comparison rows remain explicitly `pending` until their corresponding evidence exists.
 
 ## Data and artifact policy
 
