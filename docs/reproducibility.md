@@ -2,23 +2,23 @@
 
 ## Scope
 
-These instructions reproduce the research platform through the current Phase 1A / 1B boundary. They do **not** claim that later IDS/ML experiments have been reproduced yet.
+These instructions reproduce the research platform through the verified Phase 1A / Phase 1B boundary and define the reproducibility requirements for the pending Phase 1C cross-regime comparison. They do **not** claim that later IDS/ML experiments have been reproduced yet.
 
 ## 1. Clone the repository
 
 ```bash
 git clone https://github.com/QuantumNkryption/quantum-resilient-ids.git
 cd quantum-resilient-ids
-git checkout research-platform-v1
+git checkout main
 ```
 
-After this branch is merged, use the corresponding tagged release or commit SHA instead of the development branch.
-
-Record the commit used:
+Record the exact commit used:
 
 ```bash
 git rev-parse HEAD
 ```
+
+A future archived experiment or publication should cite a tagged release or immutable commit SHA rather than only `main`.
 
 ## 2. Confirm the research host/guest baseline
 
@@ -67,26 +67,31 @@ The qualified binary should resolve to the OQS build under `/opt/oqs-provider/.l
 
 Acceptance requires the OQS provider to load successfully and the intended ML-KEM, hybrid `X25519MLKEM768`, and ML-DSA capabilities to be exposed.
 
-## 5. Phase 1B acceptance run
+## 5. Phase 1B verified acceptance boundary
 
-Phase 1B must be treated as an evidence-generating validation exercise. For every TLS regime tested, create a run record containing:
+Phase 1B is complete. Its acceptance target is the reproducible PQC-capable TLS path rather than a three-regime comparison matrix.
 
-- repository commit SHA;
-- UTC timestamp;
-- exact client/server command or script version;
-- TLS regime and algorithms requested;
-- TLS version and cipher negotiated;
-- negotiated group / key-establishment evidence when available;
-- certificate/signature algorithm evidence;
-- packet-capture identifier and SHA-256 in the private evidence store;
-- sanitized `tshark`/Wireshark/Zeek-derived summary;
-- pass/fail outcome.
+The verified public acceptance summary records two independent successful TLS 1.3 runs using:
 
-The current public repository contains a sanitized ML-DSA-65 certificate summary, but Phase 1B remains incomplete until the required classical/hybrid/PQC handshake validation, capture inspection and clean rebuild are all evidenced.
+- hybrid key establishment: `X25519MLKEM768`;
+- observed group identifier: `0x11ec`;
+- ML-DSA-65 authentication/certificate evidence;
+- 23 packets in each accepted capture; and
+- the same observed handshake sequence across both captures.
 
-## 6. Destroy and rebuild
+The second accepted run followed clean destruction and rebuilding of the qualified environment and used freshly generated test artifacts.
 
-After the first acceptance suite, remove the qualification container/image and rebuild from the repository definition:
+See:
+
+- `docs/phase-1b-tls-validation.md`
+- `artifacts/sanitized/phase1b_tls_reproducibility_summary.md`
+- `artifacts/sanitized/phase1b_mldsa65_certificate_summary.txt`
+
+Raw packet captures and private keys are excluded from the public repository.
+
+## 6. Reproducing the Phase 1B rebuild condition
+
+To reproduce the clean-environment condition, remove the qualification container/image and rebuild from the repository definition:
 
 ```bash
 docker rm -f qrp-oqs-phase1a 2>/dev/null || true
@@ -94,11 +99,35 @@ docker image rm qrp-oqs:phase1a
 docker build --no-cache -t qrp-oqs:phase1a -f environment/Dockerfile .
 ```
 
-Repeat the Phase 1A checks and Phase 1B acceptance suite. A reproducibility claim requires the relevant acceptance outcomes to survive this clean rebuild.
+Then repeat the Phase 1A capability checks and the Phase 1B target TLS acceptance procedure described in `docs/phase-1b-tls-validation.md`.
 
-## 7. Artifact integrity
+A new reproduction attempt should preserve its own run ID, timestamp, exact commands or script version, capture identifier, private capture hash and sanitized evidence rather than overwriting the historical acceptance record.
 
-Raw PCAPs, private keys and credentials are not committed to the public repository. For every private raw artifact used to support a public result, record a SHA-256 hash:
+## 7. Phase 1C cross-regime reproducibility
+
+Phase 1C is pending and is defined in `docs/phase-1c-cross-regime-validation.md`.
+
+For each of the classical, hybrid and PQC-oriented regimes, record:
+
+- repository commit SHA;
+- UTC timestamp;
+- exact client/server command or script version;
+- regime label and exact algorithms requested;
+- TLS version and cipher negotiated;
+- negotiated group / key-establishment evidence where observable;
+- certificate/signature algorithm evidence;
+- packet-capture identifier and SHA-256 in the private evidence store;
+- sanitized capture-derived summary;
+- pass/fail outcome; and
+- deviations or exclusion reason if applicable.
+
+The three regimes must use the same standardized workload and capture methodology before any cross-regime numerical comparison is promoted as verified.
+
+Phase 1B does not need to be reopened to execute Phase 1C; the Phase 1C hybrid run is a fresh comparison run performed for direct comparability with its classical and PQC counterparts.
+
+## 8. Artifact integrity
+
+Raw PCAPs, private keys and credentials are not committed to the public repository. For every private raw artifact used to support a new public result, record a SHA-256 hash:
 
 ```bash
 sha256sum <artifact>
@@ -106,17 +135,17 @@ sha256sum <artifact>
 
 Only sanitized summaries belong under `artifacts/sanitized/`.
 
-## 8. Results discipline
+## 9. Results discipline
 
 `results/results.csv` is the canonical public status/results table. A row may be marked `verified` only when:
 
-1. its evidence exists;
+1. its supporting evidence exists;
 2. its provenance is recorded;
-3. the extraction or measurement procedure is documented; and
+3. the extraction, measurement or acceptance procedure is documented; and
 4. the result can be reproduced from the pinned environment and recorded inputs.
 
-Missing or incomplete results stay explicitly `pending`; they are never back-filled from illustrative thesis figures or simulations.
+Phase 1B rows are verified on the basis of the completed acceptance exercise. Phase 1C rows remain explicitly `pending` until new cross-regime evidence is generated. Missing results are never back-filled from illustrative thesis figures or simulations.
 
-## 9. Future ML reproducibility
+## 10. Future ML reproducibility
 
 Later ML phases will add pinned Python dependencies, deterministic seeds where feasible, grouped split manifests, feature-schema versions, model configurations and evaluation scripts. Those artifacts should be tied to a release/commit before any CV, SOP or paper wording describes the corresponding numerical performance as reproduced.
