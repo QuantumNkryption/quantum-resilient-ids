@@ -2,7 +2,7 @@
 
 A reproducible research platform for studying how post-quantum cryptography (PQC) changes observable network traffic and how those changes affect intrusion-detection systems.
 
-This repository extends the MSc research project **AI-Powered Intrusion Detection in Quantum-Resistant Cryptographic Systems** into a longitudinal experimental program. The immediate research question is not whether PQC is cryptographically secure; it is whether the transition from classical to hybrid and post-quantum TLS creates **cryptographic distribution shift** in network metadata that degrades IDS performance or model generalization.
+This repository extends my MSc research project titled: -AI-Powered Intrusion Detection in Quantum-Resistant Cryptographic Systems- into a longitudinal experimental program. The immediate research question is not whether PQC is cryptographically secure; it is whether the transition from classical to hybrid and post-quantum TLS creates **cryptographic distribution shift** in network metadata that degrades IDS performance or model generalization.
 
 ## Research status
 
