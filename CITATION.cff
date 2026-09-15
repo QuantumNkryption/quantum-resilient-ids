@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this research platform, please cite the repository and the associated thesis/work when appropriate."
+title: "Quantum-Resilient Intrusion Detection Research Platform"
+type: software
+authors:
+  - family-names: Emuze
+    given-names: Charles
+repository-code: "https://github.com/QuantumNkryption/quantum-resilient-ids"
+license: MIT
+version: 0.1.0
+date-released: 2026-09-15
+keywords:
+  - post-quantum cryptography
+  - intrusion detection
+  - encrypted traffic
+  - machine learning
+  - network security
+  - reproducible research

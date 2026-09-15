@@ -1,0 +1,18 @@
+Phase/Test ID: P1B-CERT-001
+Artifact type: Sanitized certificate-generation summary
+Status: VERIFIED
+
+Subject: CN=oqs-phase1b-server
+Issuer: CN=oqs-phase1b-server
+Serial: 47FC538165C7C0E9596443BE2027FFCE96A226DA
+Not Before: Sep 15 01:36:49 2026 GMT
+Not After: Oct 15 01:36:49 2026 GMT
+Certificate Signature Algorithm: mldsa65
+Subject Public Key Algorithm: mldsa65
+Basic Constraints: CA:TRUE
+
+Interpretation:
+This artifact verifies that the qualified OQS/OpenSSL environment successfully generated a self-signed ML-DSA-65 certificate. It does not, by itself, verify a TLS handshake, negotiated KEM/group, packet-capture interpretation, handshake size, latency, or clean rebuild reproducibility.
+
+Sanitization:
+Private-key material and verbose public-key/signature byte dumps are intentionally omitted. The complete original console output remains part of the private research evidence set.
