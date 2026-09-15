@@ -1,0 +1,10 @@
+phase,test_id,category,cryptographic_regime,status,result,evidence_path,notes
+0,P0-DESIGN-001,research_design,all,verified,"Research design frozen: workloads B01-B06; attack classes A01-A03; Feature Schema v1; grouped-split leakage controls; Macro-F1/CGG/calibration evaluation plan","docs/phase-0-research-design.md","Design and evaluation protocol only; no empirical performance claim"
+1A,P1A-STACK-001,environment,all,verified,"Pinned OQS stack qualified: OpenSSL 3.4.7; oqs-provider 0.11.0; liboqs 0.15.0","environment/stack.md","Containerized stack separated from host OpenSSL"
+1A,P1A-PROVIDER-001,provider,all,verified,"OQS provider active; ML-KEM, X25519MLKEM768 and ML-DSA capabilities exposed","docs/phase-1a-oqs-qualification.md","Algorithm exposure qualification; not a TLS handshake result"
+1B,P1B-CERT-001,certificate,pqc,verified,"Self-signed ML-DSA-65 certificate generated; subject/issuer CN=oqs-phase1b-server; signature and public-key algorithm mldsa65","artifacts/sanitized/phase1b_mldsa65_certificate_summary.txt","Private key and full key material excluded from public artifact"
+1B,P1B-TLS-CLASSICAL-001,tls_handshake,classical,pending,"","docs/phase-1b-tls-validation.md","Awaiting preserved handshake and capture-derived acceptance evidence"
+1B,P1B-TLS-HYBRID-001,tls_handshake,hybrid,pending,"","docs/phase-1b-tls-validation.md","Awaiting preserved X25519MLKEM768 negotiation and capture-derived acceptance evidence"
+1B,P1B-TLS-PQC-001,tls_handshake,pqc,pending,"","docs/phase-1b-tls-validation.md","Awaiting preserved PQC-oriented TLS negotiation and capture-derived acceptance evidence"
+1B,P1B-PCAP-001,packet_capture,all,pending,"","docs/phase-1b-tls-validation.md","Awaiting independently inspected sanitized PCAP summaries for required regimes"
+1B,P1B-REBUILD-001,reproducibility,all,pending,"","docs/reproducibility.md","Awaiting destroy/rebuild/reproduce acceptance evidence"
