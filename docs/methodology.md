@@ -8,8 +8,11 @@ The methodology is deliberately staged:
 
 - **Phase 0:** freeze scientific questions, workloads, labels, features, metrics and provenance.
 - **Phase 1A:** qualify the cryptographic instrumentation.
-- **Phase 1B:** validate TLS negotiation, packet capture and clean rebuild reproducibility.
+- **Phase 1B:** verify reproducible generation and capture of the target PQC-capable TLS handshake, including clean rebuild reproduction.
+- **Phase 1C:** establish the controlled classical / hybrid / PQC TLS comparison matrix.
 - **Later phases:** generate controlled datasets, evaluate conventional IDS, train/evaluate ML models and perform cross-regime generalization analysis.
+
+The separation between Phase 1B and Phase 1C is deliberate. Phase 1B is a platform-capability and reproducibility gate; Phase 1C is the comparative experimental-control gate.
 
 ## 2. Controlled variables
 
@@ -26,6 +29,8 @@ For comparisons across cryptographic regimes, preserve where applicable:
 - run duration;
 - random seed for stochastic components.
 
+Any unavoidable difference between regimes must be recorded in the run manifest.
+
 ## 3. Treatments
 
 The primary treatment variable is cryptographic regime:
@@ -35,6 +40,8 @@ The primary treatment variable is cryptographic regime:
 - `pqc`
 
 Exact algorithm names are recorded as run metadata rather than inferred from the label alone.
+
+Phase 1B verified the reproducible hybrid/PQC-capable path using `X25519MLKEM768` and ML-DSA-65 authentication. Phase 1C requires fresh directly comparable runs for all three regime labels under one common protocol.
 
 ## 4. Workloads and labels
 
@@ -50,17 +57,19 @@ These are executed only inside isolated laboratory infrastructure owned or contr
 
 ## 5. Data collection
 
-Each accepted run produces, at minimum:
+Each accepted comparative run produces, at minimum:
 
 1. run manifest;
 2. environment/tool version record;
 3. packet capture retained in the private evidence store;
-4. capture hash;
+4. capture hash retained in the private evidence record;
 5. sanitized handshake/capture summary suitable for public release;
-6. extracted flow metadata;
+6. extracted flow metadata where applicable;
 7. inclusion/exclusion decision.
 
 Raw PCAPs are not committed to the public repository.
+
+For Phase 1C specifically, all three cryptographic regimes must use the same evidence schema and capture methodology before a cross-regime comparison is considered valid.
 
 ## 6. Feature extraction
 
@@ -90,9 +99,13 @@ Any hypothesis test must identify the unit of analysis and avoid treating correl
 
 Every canonical result must trace back to immutable or versioned inputs. At minimum, record repository commit, environment versions, run ID, workload ID, cryptographic regime, capture hash, feature-schema version and model/evaluation configuration.
 
+Phase 1B established clean rebuild reproducibility for the target hybrid/PQC-capable TLS path. Phase 1C extends provenance requirements to the three-regime comparison matrix without reopening the Phase 1B acceptance decision.
+
 ## 10. Result promotion rule
 
-A value enters `results/results.csv` as `verified` only when supporting artifacts exist and the computation is reproducible. Thesis-era illustrative/simulated numbers may be discussed as historical context but are not silently promoted into the new empirical results table.
+A value enters `results/results.csv` as `verified` only when supporting artifacts exist and the computation or acceptance decision is reproducible. Thesis-era illustrative/simulated numbers may be discussed as historical context but are not silently promoted into the new empirical results table.
+
+Phase 1B rows may remain `verified` while Phase 1C rows remain `pending`; completion of the later comparative phase is not a prerequisite for preserving the earlier platform-validation result.
 
 ## 11. Ethics and safety
 
