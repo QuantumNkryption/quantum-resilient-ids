@@ -1,22 +1,5 @@
-# Data handling
-pandas==2.1.1
-numpy==1.26.0
+# Dependency manifest moved
 
-# Machine learning
-torch==2.1.0
-scikit-learn==1.3.0
-tensorflow==2.14.0
+Use [`requirements.txt`](requirements.txt) for the Python dependency manifest.
 
-# Network simulation
-qiskit==0.41.0  # for quantum simulations (if used)
-pyarrow==12.0.1  # optional but recommended for pandas
-
-# Performance measurement
-psutil==5.9.5
-
-# Evaluation / statistics
-scipy==1.11.0
-
-# Visualization (optional)
-#matplotlib==3.8.1
-#seaborn==0.12.3
+This file is retained only to avoid breaking historical links from the original MSc thesis-era repository.
