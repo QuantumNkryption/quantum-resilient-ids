@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environments
+.venv/
+venv/
+env/
+.conda/
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Secrets / credentials
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+secrets/
+credentials/
+
+# Raw or sensitive network captures
+*.pcap
+*.pcapng
+*.cap
+data/raw/
+data/external/
+
+# Large datasets and model artifacts
+*.parquet
+*.feather
+*.h5
+*.hdf5
+*.pt
+*.pth
+*.ckpt
+*.onnx
+models/
+
+# Generated outputs (curated/sanitized results remain versioned under results/ and artifacts/sanitized/)
+outputs/
+logs/
+tmp/
+*.log
+
+# Local experiment metadata containing host-specific values
+artifacts/private/
+results/private/
+
+# Build artifacts
+build/
+dist/
