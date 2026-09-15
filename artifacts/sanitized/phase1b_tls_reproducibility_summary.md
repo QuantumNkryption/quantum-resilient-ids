@@ -1,5 +1,11 @@
 # Phase 1B TLS Reproducibility Summary
 
+## Supported test IDs
+
+- `P1B-TLS-HYBRID-001`
+- `P1B-PCAP-001`
+- `P1B-REBUILD-001`
+
 ## Public artifact scope
 
 This document records the sanitized public acceptance summary for Phase 1B. It intentionally omits private keys, raw packet captures, credentials and other sensitive runtime material.
