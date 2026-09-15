@@ -2,6 +2,11 @@
 
 This directory contains evidence that is useful for independent review but safe for public release.
 
+## Current artifacts
+
+- `phase1b_mldsa65_certificate_summary.txt` — supports `P1B-CERT-001`.
+- `phase1b_tls_reproducibility_summary.md` — supports `P1B-TLS-HYBRID-001`, `P1B-PCAP-001` and `P1B-REBUILD-001`.
+
 ## Included
 
 - concise certificate/public-key metadata;
