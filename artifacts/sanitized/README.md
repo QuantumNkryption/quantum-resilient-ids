@@ -6,14 +6,16 @@ This directory contains evidence that is useful for independent review but safe 
 
 - `phase1b_mldsa65_certificate_summary.txt` — supports `P1B-CERT-001`.
 - `phase1b_tls_reproducibility_summary.md` — supports `P1B-TLS-HYBRID-001`, `P1B-PCAP-001` and `P1B-REBUILD-001`.
+- `phase1c_cross_regime_summary.md` — supports the verified Phase 1C classical / hybrid / PQC-oriented comparison, packet-capture acceptance and implementation-control rows.
 
 ## Included
 
 - concise certificate/public-key metadata;
 - version and provider summaries;
 - sanitized capture-derived summaries;
-- hashes or identifiers that allow a public result to be mapped to privately retained raw evidence;
-- non-sensitive experiment manifests.
+- aggregate packet/byte/timing measurements;
+- hashes or identifiers that allow a public result to be mapped to privately retained raw evidence where recorded;
+- non-sensitive experiment manifests and methodology notes.
 
 ## Excluded
 
@@ -29,6 +31,6 @@ The following must **not** be committed here:
 
 ## Evidence model
 
-The public artifact is a reviewable derivative, not a substitute for raw research evidence. Raw artifacts are retained separately and integrity-linked with hashes in the experiment provenance record.
+The public artifact is a reviewable derivative, not a substitute for raw research evidence. Raw artifacts are retained separately and integrity-linked with hashes in the experiment provenance record where applicable.
 
 Each sanitized artifact should identify the phase/test ID it supports and should avoid claiming more than the preserved evidence establishes.
