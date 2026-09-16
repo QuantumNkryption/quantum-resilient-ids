@@ -1,0 +1,4 @@
+condition,key_establishment,authentication,runtime,n,packets_mean,c2s_bytes_mean,s2c_bytes_mean,total_tcp_payload_mean,total_tcp_payload_min,total_tcp_payload_max,max_tcp_payload_mean,flow_duration_mean_ms,flow_duration_median_ms,flow_duration_sd_ms,flow_duration_min_ms,flow_duration_max_ms,handshake_read_mean,handshake_written_mean,status
+C1-OQS,X25519,ECDSA-P256,OpenSSL-3.4.7+oqsprovider-0.11.0,10,17.0,534.0,1009.9,1543.9,1543,1545,797.9,1.761723,1.686097,0.351874,1.451969,2.681971,797.9,420.0,verified
+C2,X25519MLKEM768,ECDSA-P256,OpenSSL-3.4.7+oqsprovider-0.11.0,30,21.0,1710.0,2097.9,3807.9,3807,3809,1448.0,3.725457,3.519535,0.381442,3.302097,4.727840,1885.9,1596.0,verified
+C3,mlkem768,ECDSA-P256,OpenSSL-3.4.7+oqsprovider-0.11.0,30,21.0,1678.0,2066.033333,3744.033333,3743,3745,1448.0,2.534811,2.493381,0.248374,2.146959,3.222942,1854.033333,1564.0,verified
