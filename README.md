@@ -2,7 +2,7 @@
 
 A reproducible research platform for studying how post-quantum cryptography (PQC) changes observable network traffic and how those changes affect intrusion-detection systems.
 
-This repository extends my MSc research project titled: -AI-Powered Intrusion Detection in Quantum-Resistant Cryptographic Systems- into a longitudinal experimental program. The immediate research question is not whether PQC is cryptographically secure; it is whether the transition from classical to hybrid and post-quantum TLS creates **cryptographic distribution shift** in network metadata that degrades IDS performance or model generalization.
+This repository extends my MSc research project titled *AI-Powered Intrusion Detection in Quantum-Resistant Cryptographic Systems* into a longitudinal experimental program. The immediate research question is not whether PQC is cryptographically secure; it is whether the transition from classical to hybrid and post-quantum TLS creates **cryptographic distribution shift** in network metadata that can affect IDS performance or model generalization.
 
 ## Research status
 
@@ -11,46 +11,69 @@ This repository extends my MSc research project titled: -AI-Powered Intrusion De
 | Phase 0 | Research design freeze: workloads, attack taxonomy, feature schema, evaluation metrics, grouped splits, provenance rules | Complete | `docs/phase-0-research-design.md` |
 | Phase 1A | Reproducible OQS/OpenSSL qualification environment | Complete | `docs/phase-1a-oqs-qualification.md` |
 | Phase 1B | PQC/hybrid TLS generation, packet capture and clean rebuild reproducibility | Complete | `docs/phase-1b-tls-validation.md`; `artifacts/sanitized/phase1b_tls_reproducibility_summary.md` |
-| Phase 1C | Controlled classical vs hybrid vs PQC TLS validation matrix | Planned / pending | `docs/phase-1c-cross-regime-validation.md` |
+| Phase 1C | Controlled classical vs hybrid vs PQC-oriented TLS validation matrix | **Complete** | `docs/phase-1c-cross-regime-validation.md`; `artifacts/sanitized/phase1c_cross_regime_summary.md` |
 
-The repository deliberately distinguishes **verified evidence** from planned or thesis-era claims. Results are never promoted from `pending` to `verified` without preserved evidence and documented provenance.
+The repository deliberately distinguishes **verified evidence** from planned or thesis-era claims. Results are promoted to `verified` only when supporting evidence and provenance are preserved.
 
 ## Current qualified cryptographic stack
 
 Phase 1A qualified a containerized stack comprising:
 
-- Ubuntu 24.04.4 LTS guest environment
+- Ubuntu 24.04.4 LTS research guest
 - OpenSSL 3.4.7
 - oqs-provider 0.11.0
 - liboqs 0.15.0
-- OQS provider active and separated from the host OpenSSL installation
-- ML-KEM, hybrid `X25519MLKEM768`, and ML-DSA exposed through the provider
+- OQS provider separated from the host OpenSSL installation
+- ML-KEM, hybrid `X25519MLKEM768`, and ML-DSA capabilities exposed through the provider
 
-Phase 1B then verified that this environment can reproducibly generate and capture the target TLS 1.3 handshake using `X25519MLKEM768` and ML-DSA-65 authentication. Two accepted runs were completed, with the second following a clean destroy/rebuild of the qualified environment.
+Phase 1B verified reproducible TLS 1.3 generation using `X25519MLKEM768` and ML-DSA-65 authentication, including a clean destroy/rebuild reproduction.
 
-The next experimental gate is **Phase 1C**, which will place classical, hybrid and PQC-oriented TLS under one standardized comparison protocol before later IDS and machine-learning experiments begin.
+Phase 1C then standardized the comparison around one OQS/OpenSSL runtime and a fixed benign workload. The canonical same-stack comparison uses:
+
+- **C1-OQS classical control:** `X25519`, ECDSA P-256 authentication, n=10
+- **C2 hybrid:** `X25519MLKEM768`, ECDSA P-256 authentication, n=30
+- **C3 PQC-oriented:** `mlkem768`, ECDSA P-256 authentication, n=30
+- TLS 1.3 and `TLS_AES_256_GCM_SHA384` in all three conditions
+- one fixed 121-byte HTTP object across conditions
+
+C3 is described as **PQC-oriented**, not fully PQC TLS, because key establishment is ML-KEM-768 while authentication remains classical ECDSA P-256.
+
+## Phase 1C preliminary findings
+
+The same-stack comparison produced highly repeatable flow-level differences:
+
+| Metric | C1-OQS X25519 | C2 X25519MLKEM768 | C3 mlkem768 |
+|---|---:|---:|---:|
+| Accepted runs | 10 | 30 | 30 |
+| Mean packet count | 17 | 21 | 21 |
+| Mean client→server TCP payload | 534 B | 1710 B | 1678 B |
+| Mean server→client TCP payload | 1009.9 B | 2097.9 B | 2066.0 B |
+| Mean total TCP payload | 1543.9 B | 3807.9 B | 3744.0 B |
+| Mean handshake read | 797.9 B | 1885.9 B | 1854.0 B |
+| Handshake written | 420 B | 1596 B | 1564 B |
+| Mean flow duration | 1.762 ms | 3.725 ms | 2.535 ms |
+
+Relative to the same-stack X25519 control, mean total TCP payload increased by approximately **146.6%** for the hybrid condition and **142.5%** for the ML-KEM-768 condition. Packet count increased from 17 to 21 in both PQC-oriented conditions.
+
+C2 and C3 were structurally much closer to one another than either was to the classical control: the hybrid condition carried only about **1.7%** more mean TCP payload than the ML-KEM-only condition.
+
+Timing results are treated more cautiously than packet/byte results because the batches were collected sequentially rather than randomized or interleaved. The packet and byte differences are the stronger Phase 1C evidence.
 
 ## Scientific framing
 
-The platform tests the hypothesis that changing the cryptographic regime can alter observable metadata even when application behavior is held constant. The key experimental regimes are:
+The platform tests the hypothesis that changing the cryptographic regime can alter observable metadata even when application behavior is held constant. The Phase 1C result motivates the next question: whether IDS and machine-learning models trained primarily on classical TLS retain performance when legitimate traffic shifts toward hybrid or PQC-oriented TLS.
 
-1. **Classical TLS** — classical key establishment and authentication.
-2. **Hybrid TLS** — classical + ML-KEM key establishment, including the qualified `X25519MLKEM768` path.
-3. **PQC-oriented TLS** — ML-KEM / ML-DSA configurations where the qualified stack permits them.
-
-The controlled workload set includes HTTPS GETs, repeated requests, API-style traffic, small and large downloads, and concurrent sessions. Initial attack-behavior classes are reconnaissance, brute-force behavior, and request flooding. These are laboratory-only workloads and are not instructions for attacking external systems.
+Candidate downstream features include packet count, directional byte volumes, packet-size statistics, flow duration, timing/inter-arrival statistics and TLS handshake metadata.
 
 ## Evaluation plan
 
-Primary evaluation uses grouped train/test splits to prevent leakage across closely related flows or runs. Core metrics include:
+Primary IDS/ML evaluation uses grouped train/test splits to prevent leakage across closely related flows or runs. Core metrics include:
 
 - Macro-F1
 - Precision and recall by class
 - Calibration / reliability
 - Confusion matrices
 - **Cryptographic Generalization Gap (CGG)** — the change in predictive performance when a detector is trained under one cryptographic regime and evaluated under another
-
-Phase 0 also freezes provenance requirements so that each later result can be traced to a workload, cryptographic regime, environment version, capture, feature set, model configuration and run identifier.
 
 ## Repository layout
 
@@ -72,9 +95,11 @@ Phase 0 also freezes provenance requirements so that each later result can be tr
 │   └── sanitized/
 │       ├── README.md
 │       ├── phase1b_mldsa65_certificate_summary.txt
-│       └── phase1b_tls_reproducibility_summary.md
+│       ├── phase1b_tls_reproducibility_summary.md
+│       └── phase1c_cross_regime_summary.md
 ├── results/
-│   └── results.csv
+│   ├── results.csv
+│   └── phase1c-summary.csv
 └── Quantum-Resilient IDS Simulation.txt   # legacy MSc thesis-era implementation
 ```
 
@@ -82,11 +107,11 @@ The legacy thesis script is retained for provenance. It should not be interprete
 
 ## Reproducing the current state
 
-See [`docs/reproducibility.md`](docs/reproducibility.md). The current verified reproducibility boundary includes Phase 1A environment qualification and the completed Phase 1B hybrid/PQC-capable TLS acceptance result. Phase 1C remains pending and must be executed under its common cross-regime protocol before comparative TLS claims are made.
+See [`docs/reproducibility.md`](docs/reproducibility.md). The current verified reproducibility boundary now includes Phase 1A qualification, Phase 1B clean-rebuild TLS validation, and the completed Phase 1C three-regime comparison.
 
 ## Results
 
-The canonical machine-readable results table is [`results/results.csv`](results/results.csv). Phase 1B acceptance rows are recorded as `verified`; Phase 1C comparison rows remain explicitly `pending` until their corresponding evidence exists.
+The canonical status/results table is [`results/results.csv`](results/results.csv). Aggregated Phase 1C measurements are available in [`results/phase1c-summary.csv`](results/phase1c-summary.csv).
 
 ## Data and artifact policy
 
