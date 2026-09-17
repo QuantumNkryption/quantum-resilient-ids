@@ -2,98 +2,60 @@
 
 ## Scope
 
-These instructions reproduce the research platform through the verified Phase 1A, Phase 1B and Phase 1C boundary. They do **not** claim that later IDS/ML experiments have been reproduced yet.
+These instructions describe the verified research platform through **Phase 2A**. They cover OQS/OpenSSL qualification, cross-regime TLS validation, benign dataset construction, feature extraction and the frozen Isolation Forest generalization experiment. Phase 2B attack-detection experiments are not yet part of the verified boundary.
 
-## 1. Clone the repository
+## 1. Clone and record the repository state
 
 ```bash
 git clone https://github.com/QuantumNkryption/quantum-resilient-ids.git
 cd quantum-resilient-ids
 git checkout main
-```
-
-Record the exact commit used:
-
-```bash
 git rev-parse HEAD
 ```
 
-A future archived experiment or publication should cite a tagged release or immutable commit SHA rather than only `main`.
+A publication or archived experiment should cite an immutable commit or tagged release rather than only `main`.
 
-## 2. Confirm the research host/guest baseline
+## 2. Qualified cryptographic runtime
 
-The Phase 1A qualification was performed from an Ubuntu 24.04.4 LTS research guest. Record the reproduction host/guest rather than assuming it is identical:
+The empirical cryptographic experiments use the qualified OQS/OpenSSL container runtime rather than the host OpenSSL installation.
 
-```bash
-cat /etc/os-release
-uname -a
-```
+Qualified versions:
 
-The cryptographic qualification image itself uses an Ubuntu 22.04 container base. This distinction is intentional and documented in `environment/stack.md`.
-
-## 3. Build the pinned OQS qualification image
-
-From the repository root:
-
-```bash
-docker build -t qrp-oqs:phase1a -f environment/Dockerfile .
-```
-
-The Dockerfile pins:
-
-- oqs-provider 0.11.0
 - OpenSSL 3.4.7
+- oqs-provider 0.11.0
 - liboqs 0.15.0
-- `OQS_LIBJADE_BUILD=OFF`
 
-Start an interactive qualification container:
-
-```bash
-docker run --rm -it --name qrp-oqs-phase1a qrp-oqs:phase1a
-```
-
-## 4. Verify the cryptographic instrumentation
-
-The qualified OpenSSL binary is:
+The validated OpenSSL executable is:
 
 ```text
 /opt/oqs-provider/.local/bin/openssl
 ```
 
-and the provider module path used by the validated runtime is:
+with provider modules loaded from:
 
 ```text
 OPENSSL_MODULES=/opt/oqs-provider/_build/lib
 ```
 
-Verify the stack:
+Verify that `default` and `oqsprovider` are active and that `mlkem768` and `X25519MLKEM768` are exposed before reproducing any cryptographic comparison.
 
-```bash
-OPENSSL_MODULES=/opt/oqs-provider/_build/lib \
-/opt/oqs-provider/.local/bin/openssl version -a
+## 3. Canonical cryptographic regimes
 
-OPENSSL_MODULES=/opt/oqs-provider/_build/lib \
-/opt/oqs-provider/.local/bin/openssl list \
-  -providers -provider default -provider oqsprovider
+Phase 1C and Phase 2A use the same treatment definitions:
 
-OPENSSL_MODULES=/opt/oqs-provider/_build/lib \
-/opt/oqs-provider/.local/bin/openssl list \
-  -kem-algorithms -provider default -provider oqsprovider
-```
+| Regime | Key establishment | Authentication |
+|---|---|---|
+| C1-OQS | `X25519` | ECDSA P-256 |
+| C2 | `X25519MLKEM768` | ECDSA P-256 |
+| C3 | `mlkem768` | ECDSA P-256 |
 
-Acceptance requires the `default` and `oqsprovider` providers to be active and the intended `mlkem768` and `X25519MLKEM768` capabilities to be exposed.
+All use TLS 1.3 and `TLS_AES_256_GCM_SHA384`.
 
-## 5. Phase 1B verified acceptance boundary
+C3 is PQC-oriented rather than fully PQC because authentication remains classical ECDSA P-256.
 
-Phase 1B is complete. Its verified public summary records two independent successful TLS 1.3 runs using:
+## 4. Phase 1B verified boundary
 
-- hybrid key establishment: `X25519MLKEM768`;
-- observed group identifier: `0x11ec`;
-- ML-DSA-65 authentication/certificate evidence;
-- 23 packets in each accepted capture; and
-- the same observed handshake sequence across both captures.
-
-The second accepted run followed clean destruction and rebuilding of the qualified environment and used freshly generated test artifacts.
+Phase 1B verified reproducible TLS 1.3 generation and capture using `X25519MLKEM768` with ML-DSA-65 authentication, including a clean destroy/rebuild reproduction.
 
 See:
 
@@ -101,93 +63,153 @@ See:
 - `artifacts/sanitized/phase1b_tls_reproducibility_summary.md`
 - `artifacts/sanitized/phase1b_mldsa65_certificate_summary.txt`
 
-## 6. Phase 1C canonical comparison
+## 5. Phase 1C verified boundary
 
-Phase 1C is complete and is documented in `docs/phase-1c-cross-regime-validation.md`.
+Phase 1C established the same-stack classical/hybrid/PQC-oriented comparison under one fixed 121-byte benign workload.
 
-The canonical same-stack comparison uses:
+See:
 
-| Condition | Group | Authentication | Accepted runs |
-|---|---|---|---:|
-| C1-OQS | `X25519` | ECDSA P-256 | 10 |
-| C2 | `X25519MLKEM768` | ECDSA P-256 | 30 |
-| C3 | `mlkem768` | ECDSA P-256 | 30 |
+- `docs/phase-1c-cross-regime-validation.md`
+- `artifacts/sanitized/phase1c_cross_regime_summary.md`
+- `results/phase1c-summary.csv`
 
-All three conditions use:
+## 6. Phase 2A benign dataset
 
-- OpenSSL 3.4.7 / oqs-provider 0.11.0;
-- TLS 1.3;
-- `TLS_AES_256_GCM_SHA384`;
-- the same ECDSA P-256 certificate/authentication configuration;
-- the same 121-byte fixed HTTP payload;
-- the same capture point, filter and run-record schema.
+The final Phase 2A dataset contains **3,000 accepted benign flows**:
 
-The fixed payload SHA-256 is:
+- 1,000 C1-OQS flows;
+- 1,000 C2 flows; and
+- 1,000 C3 flows.
 
-`04b754f4158a69fbc0af6f64d0d4abb5007a24b9e4d2fc7860843ae9a0c4e986`
+Six workload classes are represented:
 
-C3 is PQC-oriented rather than fully PQC because authentication remains classical ECDSA P-256.
+- W01: 121-byte anchor response, 200 flows per regime;
+- W02: 1 KiB small GET, 200;
+- W03: 8 KiB JSON/API-style response, 150;
+- W04: 64 KiB download, 150;
+- W05: 1 MiB download, 150;
+- W06: 30 batches × five simultaneous 64 KiB connections, 150.
 
-## 7. Phase 1C capture safeguards
+The production schedule contains 880 capture units. Each logical workload instance uses a matched `pair_id` across the three regimes, and regime order is randomized/balanced.
 
-### Immediate capture delivery
+Raw PCAPs are retained outside the public repository. Public aggregate evidence is in `artifacts/sanitized/phase2a_cryptographic_generalization_summary.md`.
 
-An early automated trial showed that successful TLS sessions could still produce header-only PCAP files if tcpdump was stopped before buffered packets were flushed. Those runs were rejected.
+## 7. Capture-path controls required for reproduction
 
-The accepted collector therefore used immediate capture delivery and packet-buffered writes, followed by a drain period before stopping tcpdump. It also rejected:
+### GRO/GSO/TSO standardization
 
-- a PCAP at or below the global-header size;
-- zero packets reported as captured;
-- zero packets found during post-capture analysis;
-- nonzero kernel drops; and
-- unexpectedly oversized TCP payloads.
+A post-reboot diagnostic capture showed a 7,240-byte aggregated TCP payload while the accepted path normally produced a 1,448-byte maximum. Because packetization and timing are model features, final Phase 2A production standardized GRO/GSO/TSO behavior across the Docker bridge, relevant veth interfaces and container interfaces.
 
-### Offload normalization
+Pre-standardization production observations were archived and excluded from the final analytical dataset.
 
-An early diagnostic capture contained a TCP payload larger than 4 KB despite a 1500-byte MTU. This was identified as a segmentation/offload artifact. TSO, GSO and GRO were normalized across the relevant virtual interfaces before official collection.
+### Explicit TLS decode-as
 
-Accepted C2/C3 captures showed maximum TCP payloads of 1448 bytes, consistent with normal segmentation on the test path.
+Automatic TShark protocol detection misclassified one valid TLS stream during production. Final feature extraction therefore explicitly decodes the experimental TCP ports as TLS rather than depending on automatic protocol heuristics.
 
-Offload state is runtime-sensitive and must be rechecked after container/network recreation or host reboot.
+These controls are part of the accepted Phase 2A measurement definition and should be reproduced before collecting a comparable dataset.
 
-## 8. Phase 1C aggregate acceptance values
+## 8. Feature Schema v1
 
-The public aggregate measurements are preserved in `results/phase1c-summary.csv` and `artifacts/sanitized/phase1c_cross_regime_summary.md`.
+The frozen Phase 2A representation contains 25 model features covering flow duration, packet counts, directional TCP payload bytes, payload-length statistics, direction ratios, inter-arrival-time statistics, TLS-record statistics, ClientHello/ServerHello lengths and handshake timing.
 
-Key values are:
+The final feature matrix contains:
 
-- C1-OQS mean total TCP payload: 1543.9 B; 17 packets.
-- C2 mean total TCP payload: 3807.9 B; 21 packets.
-- C3 mean total TCP payload: 3744.0 B; 21 packets.
-- C1-OQS mean flow duration: 1.762 ms.
-- C2 mean flow duration: 3.725 ms.
-- C3 mean flow duration: 2.535 ms.
+- 3,000 rows;
+- 25 model features; and
+- zero missing values.
 
-Timing is interpreted as exploratory because the conditions were collected in sequential batches rather than randomized/interleaved order. Packet and byte measurements are the stronger Phase 1C evidence.
+Cryptographic regime, TLS group, workload ID, server port, retransmission count and provenance fields are metadata only and are not model inputs.
 
-## 9. Artifact integrity
+## 9. Leakage-safe C1 split
 
-Raw PCAPs, private keys and credentials are not committed to the public repository. For every private raw artifact used to support a new public result, record a SHA-256 hash:
+The 1,000 C1-OQS observations are split into:
 
-```bash
-sha256sum <artifact>
+- 600 training flows;
+- 200 calibration flows; and
+- 200 held-out test flows.
+
+The split is workload-stratified. W06 is split by whole concurrent batch so that connections from the same batch do not cross train/calibration/test boundaries.
+
+The 200 held-out C1 pair IDs identify the corresponding 200 C2 and 200 C3 observations used for the primary matched evaluation.
+
+## 10. ML runtime
+
+The final Phase 2A modelling environment is isolated from the system Python environment and uses:
+
+- Python 3.10.12
+- NumPy 1.26.4
+- SciPy 1.13.1
+- pandas 2.3.3
+- scikit-learn 1.7.2
+- joblib 1.5.3
+
+A reproduction should pin compatible versions rather than rely on whatever packages happen to be installed globally.
+
+## 11. Frozen Isolation Forest baseline
+
+The verified baseline configuration is:
+
+```text
+n_estimators = 500
+max_samples = 256
+contamination = auto
+max_features = 1.0
+bootstrap = false
+random_state = 20260917
 ```
 
-Only sanitized summaries belong under `artifacts/sanitized/`.
+The model is fitted **only** on the 600 C1-OQS training observations.
 
-The Phase 1C classical dataset was integrity-frozen in the private experiment workspace by hashing the summary and accepted PCAPs after collection. Equivalent provenance should be preserved for future phases.
+The anomaly threshold is the 95th percentile of anomaly scores from the separate 200-flow C1-OQS calibration set. The observed calibration FPR is 5%.
 
-## 10. Results discipline
+No C2/C3 observation is used for fitting or threshold selection.
 
-`results/results.csv` is the canonical public status/results table. A row may be marked `verified` only when:
+## 12. Verified primary Phase 2A result
 
-1. its supporting evidence exists;
-2. its provenance is recorded;
-3. the extraction, measurement or acceptance procedure is documented; and
-4. the result can be reproduced from the pinned environment and recorded inputs.
+The primary matched held-out set contains 200 observations per regime.
 
-Phase 1A, Phase 1B and Phase 1C acceptance rows are verified. Missing later results are never back-filled from illustrative thesis figures or simulations.
+| Regime | False positives | FPR | 95% Wilson CI |
+|---|---:|---:|---:|
+| C1-OQS | 2/200 | 1.0% | 0.27–3.57% |
+| C2 | 169/200 | 84.5% | 78.84–88.86% |
+| C3 | 119/200 | 59.5% | 52.58–66.06% |
 
-## 11. Future ML reproducibility
+Cryptographic Generalization Gap relative to C1-OQS:
 
-Later ML phases will add pinned Python dependencies, deterministic seeds where feasible, grouped split manifests, feature-schema versions, model configurations and evaluation scripts. Those artifacts should be tied to a release/commit before any CV, SOP or paper wording describes the corresponding numerical performance as reproduced.
+- C2: +83.5 percentage points;
+- C3: +58.5 percentage points.
+
+Aggregate public results are in `results/phase2a-summary.csv`.
+
+## 13. Statistical reproduction
+
+The primary inferential analysis uses:
+
+- Wilson intervals for regime-level FPR;
+- exact McNemar tests on matched anomaly flags;
+- bootstrap intervals for matched FPR differences;
+- Wilcoxon signed-rank tests on matched anomaly scores;
+- matched rank-biserial effect sizes; and
+- Holm adjustment for the two primary C2-vs-C1 and C3-vs-C1 comparisons.
+
+The C2-vs-C3 comparison is secondary/exploratory.
+
+## 14. Mechanism analysis
+
+The mechanism analysis intentionally separates distribution shift from direct feature use by the model.
+
+In C1 training, `clienthello_len` and `serverhello_len` are constant and therefore receive zero Isolation Forest tree splits, even though their values shift substantially under C2/C3.
+
+The frozen forest uses timing and flow-morphology variables much more frequently. Counterfactual one-feature replacement is used only as diagnostic sensitivity analysis because the features are correlated.
+
+## 15. Artifact integrity
+
+Raw captures, private keys, credentials and host-specific evidence are excluded from Git. The private research workspace retains SHA-256 manifests for the final production dataset, feature matrix, model, statistical analysis, feature-driver analysis, mechanism analysis, figures and Phase 2A closure artifacts.
+
+Public results are sanitized derivatives that map to that private provenance trail.
+
+## 16. Result discipline
+
+`results/results.csv` is the canonical public status/results table. A row is marked `verified` only when supporting evidence exists and the procedure can be traced to recorded inputs, methods and provenance.
+
+Phase 1A, Phase 1B, Phase 1C and Phase 2A rows are now verified. Phase 2B remains outside the verified boundary until its experimental design and evidence are completed.
