@@ -7,6 +7,7 @@ This directory contains evidence that is useful for independent review but safe 
 - `phase1b_mldsa65_certificate_summary.txt` — supports `P1B-CERT-001`.
 - `phase1b_tls_reproducibility_summary.md` — supports `P1B-TLS-HYBRID-001`, `P1B-PCAP-001` and `P1B-REBUILD-001`.
 - `phase1c_cross_regime_summary.md` — supports the verified Phase 1C classical / hybrid / PQC-oriented comparison, packet-capture acceptance and implementation-control rows.
+- `phase2a_cryptographic_generalization_summary.md` — supports the verified Phase 2A benign-distribution-shift, Isolation Forest, Cryptographic Generalization Gap, workload and mechanism-analysis rows.
 
 ## Included
 
@@ -14,6 +15,7 @@ This directory contains evidence that is useful for independent review but safe 
 - version and provider summaries;
 - sanitized capture-derived summaries;
 - aggregate packet/byte/timing measurements;
+- aggregate ML evaluation and uncertainty statistics;
 - hashes or identifiers that allow a public result to be mapped to privately retained raw evidence where recorded;
 - non-sensitive experiment manifests and methodology notes.
 
@@ -27,7 +29,8 @@ The following must **not** be committed here:
 - personally identifiable information;
 - production or third-party traffic;
 - raw PCAPs containing unnecessary addressing/payload information;
-- full host inventories or sensitive internal network details.
+- full host inventories or sensitive internal network details;
+- large private feature matrices or model binaries unless a later release explicitly approves them for public distribution.
 
 ## Evidence model
 
