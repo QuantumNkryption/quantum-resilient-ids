@@ -2,17 +2,18 @@
 
 ## 1. Research design
 
-This project uses controlled comparative experimentation. The independent variable is the **cryptographic regime**; application workload and other experimental conditions are held as constant as practical. The principal outcome is the change in observable network metadata and, in later phases, downstream IDS/model performance.
+This project uses controlled comparative experimentation. The principal independent variable is the **cryptographic regime**; application workload and other experimental conditions are held as constant as practical. The project then evaluates both observable network-metadata shift and downstream IDS/model generalization.
 
-The methodology is deliberately staged:
+The methodology is staged:
 
-- **Phase 0:** freeze scientific questions, workloads, labels, features, metrics and provenance.
-- **Phase 1A:** qualify the cryptographic instrumentation.
-- **Phase 1B:** verify reproducible generation and capture of the target PQC-capable TLS handshake, including clean rebuild reproduction.
+- **Phase 0:** freeze scientific questions, workloads, labels, features, metrics and provenance rules.
+- **Phase 1A:** qualify the OQS/OpenSSL cryptographic instrumentation.
+- **Phase 1B:** verify reproducible generation and capture of the target hybrid/PQC-capable TLS path, including clean rebuild reproduction.
 - **Phase 1C:** establish the controlled classical / hybrid / PQC-oriented TLS comparison matrix.
-- **Later phases:** generate controlled datasets, evaluate conventional IDS, train/evaluate ML models and perform cross-regime generalization analysis.
+- **Phase 2A:** generate matched benign traffic at scale and test whether a detector trained only on classical benign TLS generalizes to unseen hybrid/PQC-oriented regimes.
+- **Phase 2B:** introduce controlled attack traffic and supervised IDS evaluation across cryptographic regimes.
 
-The separation between Phase 1B and Phase 1C is deliberate. Phase 1B is a platform-capability and reproducibility gate; Phase 1C is the comparative experimental-control gate.
+The staged structure prevents platform qualification, benign distribution shift and attack-detection performance from being conflated.
 
 ## 2. Controlled variables
 
@@ -20,118 +21,194 @@ For comparisons across cryptographic regimes, preserve where applicable:
 
 - workload definition;
 - endpoint roles;
-- payload/application object;
+- application object/response size;
 - connection/session count;
 - capture point;
 - software image and configuration other than the cryptographic treatment;
 - TLS protocol version and cipher suite;
 - certificate/authentication scheme;
 - feature-extraction version;
-- run-record schema.
+- run-record schema; and
+- capture-quality controls.
 
 Any unavoidable difference between regimes must be recorded explicitly.
 
-## 3. Phase 1C treatments
+## 3. Cryptographic treatments
 
-The canonical same-stack Phase 1C comparison uses one qualified OQS/OpenSSL runtime:
+The canonical same-stack comparison uses one qualified OQS/OpenSSL runtime:
 
 - OpenSSL 3.4.7
 - oqs-provider 0.11.0
 - liboqs 0.15.0
 
-The three conditions are:
+The three Phase 1C/2A conditions are:
 
-- **C1-OQS classical control:** `X25519` key establishment, ECDSA P-256 authentication, n=10.
-- **C2 hybrid:** `X25519MLKEM768` key establishment, ECDSA P-256 authentication, n=30.
-- **C3 PQC-oriented:** `mlkem768` key establishment, ECDSA P-256 authentication, n=30.
+- **C1-OQS classical control:** `X25519` key establishment, ECDSA P-256 authentication.
+- **C2 hybrid:** `X25519MLKEM768` key establishment, ECDSA P-256 authentication.
+- **C3 PQC-oriented:** `mlkem768` key establishment, ECDSA P-256 authentication.
 
-All three use TLS 1.3 and `TLS_AES_256_GCM_SHA384` with the same fixed 121-byte application payload.
+All use TLS 1.3 and `TLS_AES_256_GCM_SHA384` with the same certificate/authentication configuration.
 
 C3 is labelled PQC-oriented rather than fully PQC because authentication remains classical ECDSA P-256.
 
-A preliminary 30-run X25519 dataset had been collected under system OpenSSL 3.0.2. Because that introduced an implementation mismatch relative to C2, a 10-run X25519 sanity control was repeated under the exact OQS/OpenSSL 3.4.7 stack used for C2/C3. The same-stack C1-OQS dataset is the canonical Phase 1C classical control.
+## 4. Phase 2A benign workloads
 
-## 4. Workloads and labels
+Phase 2A expands the fixed Phase 1C anchor into six matched benign workload classes:
 
-### Phase 1C fixed workload
+| Workload | Description | Flows per regime |
+|---|---|---:|
+| W01 | Phase 1C anchor, 121-byte response | 200 |
+| W02 | Small GET, 1 KiB | 200 |
+| W03 | API-style response, 8 KiB JSON | 150 |
+| W04 | Small download, 64 KiB | 150 |
+| W05 | Large download, 1 MiB | 150 |
+| W06 | 30 batches × five simultaneous 64 KiB connections | 150 |
 
-Phase 1C uses one fixed benign HTTP object to isolate cryptographic effects. The response payload is 121 bytes with SHA-256:
+This produces 1,000 benign flows per cryptographic regime and 3,000 total accepted observations.
 
-`04b754f4158a69fbc0af6f64d0d4abb5007a24b9e4d2fc7860843ae9a0c4e986`
+Each logical workload instance is assigned a common `pair_id` across C1-OQS, C2 and C3 so that primary comparisons can be performed on matched workload identities.
 
-### Later benign workloads
+Regime order is randomized and position-balanced within the production schedule to reduce systematic collection-order effects.
 
-B01 HTTPS GETs; B02 repeated requests; B03 API-style traffic; B04 small downloads; B05 large downloads; B06 concurrent sessions.
+## 5. Data collection and acceptance
 
-### Initial attack-behavior classes
+Each accepted comparative flow produces, at minimum:
 
-A01 reconnaissance; A02 brute-force behavior; A03 request flooding.
-
-These are executed only inside isolated laboratory infrastructure owned or controlled by the researcher.
-
-## 5. Data collection
-
-Each accepted comparative run produces, at minimum:
-
-1. run manifest;
-2. environment/tool version record;
+1. run/production ledger metadata;
+2. environment and tool-version provenance;
 3. packet capture retained in the private evidence store;
-4. capture hash retained in the private evidence record where recorded;
-5. sanitized handshake/capture summary suitable for public release;
-6. extracted flow metadata;
-7. inclusion/exclusion decision.
+4. capture SHA-256 recorded in the private evidence record;
+5. extracted flow metadata and model features;
+6. inclusion/exclusion status; and
+7. production-quality checks.
 
 Raw PCAPs are not committed to the public repository.
 
-For Phase 1C, all canonical conditions use the same evidence schema and capture methodology.
-
 ### Capture-quality safeguards
 
-Two measurement artifacts were identified during pilot collection and corrected before official data acceptance:
+Several runtime artifacts were identified and corrected before final Phase 2A acceptance:
 
-- **Capture buffering:** an early automated batch produced header-only PCAPs even though packets reached the capture filter. These runs were rejected. The collector was modified to use immediate delivery, packet-buffered output, a drain period, explicit zero-packet/header-only rejection and kernel-drop checks.
-- **Segmentation offload:** an early diagnostic capture showed an impossible TCP payload above 4 KB on a 1500-byte MTU path. TSO/GSO/GRO were normalized across the relevant virtual interfaces. Official PQC-oriented captures then showed normal segmentation with maximum TCP payloads of 1448 bytes.
+- **Capture buffering:** earlier Phase 1 work showed that successful sessions can still yield header-only PCAPs if capture buffers are not drained. Accepted collection therefore checks packet presence and capture drops.
+- **Segmentation offload:** after a VM restart, a Phase 2A diagnostic capture contained a 7,240-byte TCP payload even though pre-reboot captures consistently maxed at 1,448 bytes. GRO/GSO/TSO behavior was standardized across the Docker bridge, host veths and container interfaces. Pre-standardization production observations were archived and excluded from the final analytical dataset.
+- **Protocol dissection:** TShark automatically classified one valid TLS stream as another application protocol. Final feature extraction explicitly decodes the experimental TCP ports as TLS rather than relying on automatic protocol heuristics.
 
-## 6. Feature extraction
+## 6. Feature Schema v1
 
-Feature Schema v1 emphasizes encrypted-traffic metadata rather than payload content. Candidate fields include counts, byte volumes, packet-size statistics, duration, timing/inter-arrival statistics, directionality and TLS/handshake metadata exposed by the qualified capture toolchain.
+The final Phase 2A model representation contains 25 encrypted-traffic metadata features spanning:
 
-Phase 1C already demonstrates substantial distribution shifts in several of these fields, especially packet count, directional bytes, total TCP payload and handshake size.
+- flow duration;
+- total/directional packet counts;
+- total/directional TCP payload bytes;
+- payload-length statistics;
+- byte and packet direction ratios;
+- inter-arrival-time statistics;
+- TLS record count/length statistics;
+- ClientHello and ServerHello lengths; and
+- ClientHello-to-ServerHello timing (`hello_rtt_ms`).
 
-Feature extraction is versioned. The feature-schema version must be written to every processed record or dataset manifest.
+Feature extraction does not include plaintext application content.
+
+The following are metadata only and are not model inputs:
+
+- cryptographic regime;
+- TLS group;
+- workload ID;
+- server port;
+- retransmission count;
+- capture filename/hash; and
+- experimental ordering metadata.
+
+The final Phase 2A feature matrix contains 3,000 rows, 25 model features and zero missing values.
 
 ## 7. Dataset construction and leakage prevention
 
-Primary model evaluation must use **grouped splitting**. Records derived from the same experimental run, closely related connection family or source capture must remain within a single partition. A naive random row-level split is not accepted as the primary evaluation because it can leak run-specific fingerprints across train and test sets.
+The 1,000 C1-OQS observations are partitioned as:
 
-## 8. Statistical and ML evaluation
+- 600 training flows;
+- 200 calibration flows; and
+- 200 held-out test flows.
 
-The planned core outputs are:
+The split is workload-stratified. For W06, entire concurrent batches are assigned to a partition rather than individual connections so that connections from the same batch cannot leak across training, calibration and test.
 
-- Macro-F1;
-- per-class precision and recall;
-- confusion matrix;
-- probability calibration/reliability where probabilistic outputs are available;
-- cross-regime train/test matrix;
-- Cryptographic Generalization Gap (CGG);
-- uncertainty intervals or repeated/grouped resampling where appropriate.
+The 200 held-out C1 `pair_id` values define the primary matched evaluation set. Their corresponding 200 C2 and 200 C3 observations are evaluated without contributing to model fitting or threshold selection.
 
-Phase 1C timing results are treated as exploratory because conditions were collected in sequential batches rather than randomized/interleaved order. Packet and byte measurements are the stronger Phase 1C evidence.
+## 8. Phase 2A anomaly-detection baseline
 
-Any hypothesis test must identify the unit of analysis and avoid treating correlated flow rows from a single run as independent experimental replicates.
+The frozen baseline uses `sklearn.ensemble.IsolationForest` with:
 
-## 9. Reproducibility and provenance
+- `n_estimators=500`;
+- `max_samples=256`;
+- `contamination="auto"`;
+- `max_features=1.0`;
+- `bootstrap=False`;
+- `random_state=20260917`; and
+- all 25 model features.
 
-Every canonical result must trace back to immutable or versioned inputs. At minimum, record repository commit, environment versions, run ID, workload ID, cryptographic regime, capture identifier/hash where retained, feature-schema version and model/evaluation configuration.
+The Isolation Forest is fitted only on the 600 C1-OQS training flows.
 
-Phase 1B established clean rebuild reproducibility for the target hybrid/PQC-capable TLS path. Phase 1C extends provenance to the completed three-regime comparison matrix.
+The anomaly threshold is fixed at the 95th percentile of anomaly scores from the 200 separate C1-OQS calibration observations. This produced an observed calibration false-positive rate of 5%.
 
-## 10. Result promotion rule
+The primary evaluation then scores the matched held-out set of 200 C1-OQS, 200 C2 and 200 C3 observations.
 
-A value enters `results/results.csv` as `verified` only when supporting artifacts exist and the computation or acceptance decision is reproducible. Thesis-era illustrative/simulated numbers may be discussed as historical context but are not silently promoted into the new empirical results table.
+## 9. Statistical evaluation
 
-Phase 1A, Phase 1B and the completed Phase 1C acceptance rows are now verified. Later IDS/ML claims remain pending until their own evidence exists.
+Phase 2A reports:
 
-## 11. Ethics and safety
+- primary false-positive rate by regime;
+- Wilson 95% confidence intervals for regime FPR;
+- paired FPR differences / Cryptographic Generalization Gap;
+- exact McNemar tests on matched binary anomaly outcomes;
+- bootstrap intervals for matched risk differences;
+- Wilcoxon signed-rank tests for paired anomaly-score shifts;
+- matched rank-biserial effect sizes;
+- Holm adjustment for the two prespecified primary comparisons (C2 vs C1 and C3 vs C1);
+- workload-specific false-positive rates; and
+- feature-shift, counterfactual-sensitivity and mechanism diagnostics.
 
-No real user traffic or personally identifiable information is required for the controlled platform. Attack-behavior generation is confined to isolated systems under the researcher's control. Public artifacts are sanitized to remove credentials, private keys, sensitive addressing and unnecessary raw traffic.
+The C2-vs-C3 comparison is treated as secondary/exploratory rather than as a prespecified primary contrast.
+
+## 10. Cryptographic Generalization Gap
+
+For Phase 2A, the **Cryptographic Generalization Gap (CGG)** is operationalized as the change in benign false-positive behavior when a detector trained exclusively on classical cryptographic traffic is evaluated on matched legitimate traffic generated under an unseen cryptographic regime.
+
+The verified Phase 2A primary gaps are:
+
+- C2 vs C1-OQS: +83.5 percentage points;
+- C3 vs C1-OQS: +58.5 percentage points.
+
+This definition is specific to the evaluated task and should not be interpreted as a universal property of every IDS or PQC deployment.
+
+## 11. Mechanism analysis
+
+Phase 2A distinguishes **observable distribution shift** from **direct model use of a feature**.
+
+`clienthello_len` and `serverhello_len` changed dramatically between C1 and C2/C3, but both had zero variance in the C1 training set and therefore zero Isolation Forest tree splits. They are strong evidence of cryptographic distribution shift but were not direct partition variables in the frozen forest.
+
+The forest used timing and flow-morphology variables much more heavily. A matched one-feature counterfactual sensitivity analysis replaces a target-regime feature with its matched C1 value and rescored the observation without retraining. Because network-flow features are correlated, this is interpreted as diagnostic sensitivity rather than causal attribution.
+
+## 12. Reproducibility and provenance
+
+Every canonical result must trace back to immutable or versioned inputs. At minimum, preserve:
+
+- repository commit;
+- cryptographic runtime versions;
+- workload and production-schedule versions;
+- flow/run identifiers;
+- cryptographic regime;
+- capture identifier/hash in the private evidence store;
+- feature-schema and extraction versions;
+- model configuration and seed;
+- ML environment versions; and
+- analysis/output hashes.
+
+Phase 2A additionally freezes dataset, feature-matrix, model, statistical-analysis, feature-driver, mechanism-analysis, figure and closure artifacts using SHA-256 manifests in the private research workspace.
+
+## 13. Result promotion rule
+
+A value enters `results/results.csv` as `verified` only when supporting evidence exists and the computation or acceptance decision is reproducible.
+
+Phase 1A, Phase 1B, Phase 1C and the completed Phase 2A acceptance/result rows are verified. Phase 2B attack-detection claims remain pending until their own design, data and evidence exist.
+
+## 14. Ethics and safety
+
+No real user traffic or personally identifiable information is required for the controlled platform. Future attack-behavior generation is confined to isolated systems owned or controlled by the researcher. Public artifacts are sanitized to remove credentials, private keys, sensitive addressing and unnecessary raw traffic.
